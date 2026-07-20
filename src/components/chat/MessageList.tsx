@@ -34,7 +34,7 @@ export default function MessageList({ messages, selectedMessages, onSelectChange
           <span className="w-8 h-px bg-[var(--border)]" />
         </div>
         {/* 模式提示 */}
-        <p className="text-xs text-[var(--text-muted)] mt-2">选择模式，向 AI 提问即可生成知识节点</p>
+        <p className="text-xs text-[var(--text-muted)] mt-2">向 AI 提问，即可生成知识节点</p>
       </div>
     );
   }

@@ -157,18 +157,24 @@ export function Toolbar({ selectedNodeIds }: ToolbarProps) {
         {summarizing === 'all' ? <Loader2 size={18} className="animate-spin" /> : <FolderTree size={18} />}
       </button>
 
-      {/* 多选时出现：归纳选中节点 */}
-      {selectionCount >= 2 && (
-        <button
-          onClick={handleSummarizeSelected}
-          disabled={summarizing !== null}
-          className="flex items-center gap-1.5 px-2 py-1.5 rounded-md whitespace-nowrap text-[11px] font-medium bg-[var(--accent-soft)] text-[var(--accent)] hover:brightness-125 disabled:opacity-40 disabled:pointer-events-none transition-all"
-          title="基于选中节点归纳主题"
-        >
-          {summarizing === 'selected' ? <Loader2 size={14} className="animate-spin" /> : <FolderTree size={14} />}
-          归纳选中 ({selectionCount})
-        </button>
-      )}
+      {/* 归纳选中节点：常驻显示，选中 ≥2 个节点时可用 */}
+      <button
+        onClick={handleSummarizeSelected}
+        disabled={selectionCount < 2 || summarizing !== null}
+        className={
+          selectionCount >= 2
+            ? 'flex items-center gap-1.5 px-2 py-1.5 rounded-md whitespace-nowrap text-[11px] font-medium bg-[var(--accent-soft)] text-[var(--accent)] hover:brightness-125 disabled:opacity-40 disabled:pointer-events-none transition-all'
+            : 'flex items-center gap-1.5 px-2 py-1.5 rounded-md whitespace-nowrap text-[11px] font-medium text-[var(--text-secondary)] opacity-50 cursor-not-allowed transition-all'
+        }
+        title={
+          selectionCount >= 2
+            ? '基于选中节点归纳主题'
+            : 'Shift+点击画布中的节点选择多个，再进行归纳'
+        }
+      >
+        {summarizing === 'selected' ? <Loader2 size={14} className="animate-spin" /> : <FolderTree size={14} />}
+        {selectionCount >= 2 ? `归纳选中 (${selectionCount})` : '归纳选中'}
+      </button>
 
       <button
         onClick={() => setBreakthroughOpen(true)}

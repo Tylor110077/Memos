@@ -6,8 +6,15 @@ import { useUIStore } from '@/stores/uiStore';
 import { useGraphStore } from '@/stores/graphStore';
 import { useChatStore } from '@/stores/chatStore';
 import ReactMarkdown from 'react-markdown';
-import { X, Edit2, Trash2, Save, Split, Loader2, MessageSquare, Lightbulb, BookOpen, Info } from 'lucide-react';
+import { X, Edit2, Trash2, Save, Split, Loader2, MessageSquare, Lightbulb, BookOpen, Info, RefreshCw } from 'lucide-react';
+import { getCachedRecommendations, saveRecommendations, clearRecommendations } from '@/lib/db';
 import type { NodeType, KnowledgeNode, KnowledgeEdge } from '@/types';
+
+interface RelatedRecommendation {
+  title: string;
+  description: string;
+  reason: string;
+}
 
 const typeLabels: Record<NodeType, string> = {
   concept: '概念',
@@ -35,44 +42,87 @@ export function NodeDetail() {
   const [isSplitting, setIsSplitting] = useState(false);
   const [showSplitForm, setShowSplitForm] = useState(false);
   const [splitInstruction, setSplitInstruction] = useState('');
-  const [relatedRecommendations, setRelatedRecommendations] = useState<{ title: string; reason: string }[]>([]);
+  const [relatedRecommendations, setRelatedRecommendations] = useState<RelatedRecommendation[]>([]);
   const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [expandedIdx, setExpandedIdx] = useState<string | null>(null);
 
   const node = nodes.find((n) => n.id === nodeDetailId);
 
-  // 当面板打开时自动获取相关推荐
-  const fetchRelatedRecommendations = useCallback(async (targetNode: KnowledgeNode) => {
-    setIsLoadingRecommendations(true);
-    setRelatedRecommendations([]);
-    try {
-      const res = await fetch('/api/recommend', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          currentNode: { title: targetNode.title, content: targetNode.content },
-          graph: { nodes: nodes.map(n => ({ title: n.title, type: n.type, level: n.level })), edges: [] },
-          type: 'related',
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setRelatedRecommendations((data.recommendations || []).slice(0, 3));
-      }
-    } catch (error) {
-      console.error('获取相关推荐失败:', error);
-    } finally {
-      setIsLoadingRecommendations(false);
-    }
+  // 调用推荐 API（不处理缓存与 loading 状态）
+  const requestRecommendations = useCallback(async (targetNode: KnowledgeNode): Promise<RelatedRecommendation[]> => {
+    const res = await fetch('/api/recommend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        currentNode: { title: targetNode.title, content: targetNode.content },
+        graph: { nodes: nodes.map(n => ({ title: n.title, type: n.type, level: n.level })), edges: [] },
+        type: 'related',
+      }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.recommendations || []).slice(0, 3);
   }, [nodes]);
 
+  // 当面板打开时自动获取相关推荐：优先读 IndexedDB 缓存，命中则立即显示、不发请求
   useEffect(() => {
-    if (nodeDetailOpen && node) {
-      fetchRelatedRecommendations(node);
-    } else {
+    setExpandedIdx(null);
+    if (!nodeDetailOpen || !node) {
       setRelatedRecommendations([]);
+      setIsLoadingRecommendations(false);
+      return;
     }
+    let cancelled = false;
+    (async () => {
+      // 1. 先查缓存
+      try {
+        const cached = await getCachedRecommendations(node.id);
+        if (cached && cached.length > 0) {
+          if (!cancelled) setRelatedRecommendations(cached as RelatedRecommendation[]);
+          return;
+        }
+      } catch (error) {
+        console.error('读取推荐缓存失败:', error);
+      }
+      // 2. 缓存未命中 → 请求 API 并写入缓存
+      if (cancelled) return;
+      setIsLoadingRecommendations(true);
+      try {
+        const recs = await requestRecommendations(node);
+        if (cancelled) return;
+        setRelatedRecommendations(recs);
+        if (recs.length > 0) {
+          await saveRecommendations(node.id, node.boardId, recs);
+        }
+      } catch (error) {
+        console.error('获取相关推荐失败:', error);
+      } finally {
+        if (!cancelled) setIsLoadingRecommendations(false);
+      }
+    })();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodeDetailOpen, nodeDetailId]);
+
+  // 换一批：清除缓存 → 重新请求 → 保存缓存 → 更新显示
+  const handleRefreshRecommendations = useCallback(async () => {
+    if (!node || isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await clearRecommendations(node.id);
+      const recs = await requestRecommendations(node);
+      setRelatedRecommendations(recs);
+      setExpandedIdx(null);
+      if (recs.length > 0) {
+        await saveRecommendations(node.id, node.boardId, recs);
+      }
+    } catch (error) {
+      console.error('刷新推荐失败:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [node, isRefreshing, requestRecommendations]);
 
   const handleLearnRecommendation = (title: string) => {
     closeNodeDetail();
@@ -274,27 +324,60 @@ export function NodeDetail() {
           <Lightbulb size={13} className="text-[var(--accent)]" />
           <span className="text-xs font-medium text-[var(--text-primary)]">相关推荐</span>
           {isLoadingRecommendations && <Loader2 size={12} className="animate-spin text-[var(--text-muted)]" />}
+          <span className="flex-1" />
+          {relatedRecommendations.length > 0 && (
+            <button
+              onClick={handleRefreshRecommendations}
+              disabled={isRefreshing || isLoadingRecommendations}
+              title="换一批推荐"
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <RefreshCw size={11} className={isRefreshing ? 'animate-spin' : ''} />
+              换一批
+            </button>
+          )}
         </div>
         {relatedRecommendations.length > 0 ? (
           <div className="space-y-1.5">
-            {relatedRecommendations.map((rec, idx) => (
-              <div
-                key={idx}
-                className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-[var(--bg-secondary)] border border-[var(--border)]"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-[var(--text-primary)] truncate">{rec.title}</p>
-                  <p className="text-[11px] text-[var(--text-muted)] truncate mt-0.5">{rec.reason}</p>
-                </div>
-                <button
-                  onClick={() => handleLearnRecommendation(rec.title)}
-                  className="flex items-center gap-1 px-2 py-1 text-[11px] rounded bg-[var(--accent-soft)] text-[var(--accent)] hover:bg-[var(--accent-hover)]/25 transition-colors shrink-0"
+            {relatedRecommendations.map((rec, idx) => {
+              const key = String(idx);
+              const isExpanded = expandedIdx === key;
+              return (
+                <div
+                  key={idx}
+                  onClick={() => setExpandedIdx(isExpanded ? null : key)}
+                  className={`cursor-pointer px-2.5 py-1.5 rounded-md bg-[var(--bg-secondary)] border transition-colors ${
+                    isExpanded
+                      ? 'border-[var(--accent)]'
+                      : 'border-[var(--border)] hover:border-[var(--border-strong)]'
+                  }`}
                 >
-                  <BookOpen size={11} />
-                  学习
-                </button>
-              </div>
-            ))}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-[var(--text-primary)] truncate">{rec.title}</p>
+                      <p className={`text-[11px] text-[var(--text-muted)] mt-0.5 ${isExpanded ? 'whitespace-normal' : 'truncate'}`}>
+                        {rec.reason}
+                      </p>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleLearnRecommendation(rec.title);
+                      }}
+                      className="flex items-center gap-1 px-2 py-1 text-[11px] rounded bg-[var(--accent-soft)] text-[var(--accent)] hover:bg-[var(--accent-hover)]/25 transition-colors shrink-0"
+                    >
+                      <BookOpen size={11} />
+                      学习
+                    </button>
+                  </div>
+                  {isExpanded && rec.description && (
+                    <p className="text-[11px] leading-relaxed text-[var(--text-secondary)] mt-1.5 pt-1.5 border-t border-[var(--border)]">
+                      {rec.description}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ) : (
           !isLoadingRecommendations && (
