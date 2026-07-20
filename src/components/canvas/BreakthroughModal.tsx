@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, Dices, BookOpen, Loader2 } from 'lucide-react';
+import { X, Dices, BookOpen, Loader2, ChevronDown } from 'lucide-react';
 import { useGraphStore } from '@/stores/graphStore';
 import { useChatStore } from '@/stores/chatStore';
 
@@ -22,6 +22,7 @@ export function BreakthroughModal({ visible, onClose }: BreakthroughModalProps) 
   const { setChatPanelOpen, setPendingMessage } = useChatStore();
   const [recommendations, setRecommendations] = useState<BreakthroughRecommendation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null); // 点击展开完整内容
 
   const fetchBreakthrough = useCallback(async () => {
     setIsLoading(true);
@@ -40,6 +41,7 @@ export function BreakthroughModal({ visible, onClose }: BreakthroughModalProps) 
       if (res.ok) {
         const data = await res.json();
         setRecommendations(data.recommendations || []);
+        setExpandedIdx(null);
       }
     } catch (e) {
       console.error('破茧推荐获取失败:', e);
@@ -74,7 +76,7 @@ export function BreakthroughModal({ visible, onClose }: BreakthroughModalProps) 
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
           <div className="flex items-center gap-2">
             <Dices size={20} className="text-[var(--accent)]" />
-            <h2 className="text-base font-semibold text-[var(--text-primary)]">破茧推荐</h2>
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">随机推荐</h2>
             <span className="text-xs text-[var(--text-muted)]">跳出知识舒适区</span>
           </div>
           <button
@@ -99,41 +101,46 @@ export function BreakthroughModal({ visible, onClose }: BreakthroughModalProps) 
             </div>
           ) : (
             <div className="space-y-3">
-              {recommendations.map((rec, idx) => (
-                <div
-                  key={idx}
-                  className={`p-4 rounded-xl border hover:shadow-md transition-shadow ${
-                    rec.category === 'trivia'
-                      ? 'border-pink-500/20 bg-gradient-to-br from-pink-500/10 to-amber-500/10'
-                      : 'border-[var(--border)] bg-gradient-to-br from-[var(--accent-soft)] to-transparent'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-sm font-semibold text-[var(--text-primary)]">{rec.title}</h3>
-                    {rec.category === 'trivia' && (
-                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-pink-500/20 text-pink-400">
-                        ✨ 趣闻
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-[var(--text-secondary)] mb-2 line-clamp-2">{rec.description}</p>
-                  <p className={`text-xs mb-3 ${rec.category === 'trivia' ? 'text-pink-400' : 'text-[var(--accent)]'}`}>
-                    <span className="font-medium">为什么有趣：</span>
-                    {rec.reason}
-                  </p>
-                  <button
-                    onClick={() => handleStartLearning(rec.title, rec.category)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-white text-xs rounded-md transition-colors ${
+              {recommendations.map((rec, idx) => {
+                const isExpanded = expandedIdx === idx;
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => setExpandedIdx(isExpanded ? null : idx)}
+                    className={`p-4 rounded-xl border cursor-pointer transition-all ${
                       rec.category === 'trivia'
-                        ? 'bg-pink-500 hover:bg-pink-600'
-                        : 'bg-[var(--accent)] hover:bg-[var(--accent-hover)]'
-                    }`}
+                        ? 'border-pink-500/20 bg-gradient-to-br from-pink-500/10 to-amber-500/10'
+                        : 'border-[var(--border)] bg-gradient-to-br from-[var(--accent-soft)] to-transparent'
+                    } ${isExpanded ? (rec.category === 'trivia' ? 'border-pink-500/50 shadow-md' : 'border-[var(--accent)] shadow-md') : 'hover:shadow-md'}`}
                   >
-                    <BookOpen size={13} />
-                    开始学习
-                  </button>
-                </div>
-              ))}
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-sm font-semibold text-[var(--text-primary)] flex-1">{rec.title}</h3>
+                      {rec.category === 'trivia' && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-pink-500/20 text-pink-400">
+                          ✨ 趣闻
+                        </span>
+                      )}
+                      <ChevronDown size={14} className={`text-[var(--text-muted)] transition-transform duration-200 shrink-0 ${isExpanded ? 'rotate-180' : ''}`} />
+                    </div>
+                    <p className={`text-xs text-[var(--text-secondary)] mb-2 ${isExpanded ? 'whitespace-normal leading-relaxed' : 'line-clamp-2'}`}>{rec.description}</p>
+                    <p className={`text-xs mb-3 ${rec.category === 'trivia' ? 'text-pink-400' : 'text-[var(--accent)]'}`}>
+                      <span className="font-medium">为什么有趣：</span>
+                      {rec.reason}
+                    </p>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleStartLearning(rec.title, rec.category); }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-white text-xs rounded-md transition-colors ${
+                        rec.category === 'trivia'
+                          ? 'bg-pink-500 hover:bg-pink-600'
+                          : 'bg-[var(--accent)] hover:bg-[var(--accent-hover)]'
+                      }`}
+                    >
+                      <BookOpen size={13} />
+                      开始学习
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

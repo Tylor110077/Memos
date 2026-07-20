@@ -41,6 +41,7 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
       <div className="flex items-end gap-2 bg-[var(--bg-tertiary)] rounded-xl px-3 py-2 border border-[var(--border)]">
         <textarea
           ref={textareaRef}
+          id="chat-input"
           value={input}
           onChange={handleInput}
           onKeyDown={handleKeyDown}

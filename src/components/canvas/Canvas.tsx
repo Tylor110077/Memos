@@ -243,12 +243,23 @@ function CanvasInner() {
   const onEdgeClick = useCallback((_: any, edge: Edge) => { selectEdge(edge.id); }, [selectEdge]);
   const onPaneClick = useCallback(() => { selectNode(null); setMultiSelectedIds(new Set()); }, [selectNode]);
 
-  // Delete/Backspace 删除选中的边（T-441）
+  // Delete/Backspace：删除 Shift 多选的节点（一键删除），或删除选中的边（T-441）
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Delete' && e.key !== 'Backspace') return;
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+
+      // 优先：删除 Shift 多选的节点
+      if (multiSelectedIds.size > 0) {
+        e.preventDefault();
+        const { removeNode: delNode } = useGraphStore.getState();
+        multiSelectedIds.forEach((id) => delNode(id));
+        setMultiSelectedIds(new Set());
+        return;
+      }
+
+      // 其次：删除选中的边
       const { selectedEdgeId: edgeId, removeEdge: delEdge } = useGraphStore.getState();
       if (edgeId) {
         e.preventDefault();
@@ -257,7 +268,7 @@ function CanvasInner() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [multiSelectedIds]);
 
   // 切换画板后自动居中
   useEffect(() => {
@@ -265,6 +276,13 @@ function CanvasInner() {
       setTimeout(() => reactFlowInstance.fitView({ duration: 300 }), 100);
     }
   }, [currentBoardId, reactFlowInstance]);
+
+  // 监听全局快捷键触发的 fitView 事件（快捷键系统在 React Flow 上下文外部，通过自定义事件通信）
+  useEffect(() => {
+    const handleFitView = () => reactFlowInstance.fitView({ duration: 300 });
+    window.addEventListener('studyboard:fit-view', handleFitView);
+    return () => window.removeEventListener('studyboard:fit-view', handleFitView);
+  }, [reactFlowInstance]);
 
   return (
     <div className="relative h-full w-full" style={{ backgroundColor: '#1e1e2e' }}>
@@ -293,7 +311,7 @@ function CanvasInner() {
         deleteKeyCode={['Backspace', 'Delete']}
         proOptions={{ hideAttribution: true }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={30} size={0.5} color="#2a2a3e" />
+        <Background variant={BackgroundVariant.Lines} gap={36} size={1} color="rgba(255,255,255,0.045)" />
       </ReactFlow>
 
       {storeNodes.length === 0 && (

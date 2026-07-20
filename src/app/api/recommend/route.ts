@@ -8,10 +8,13 @@ export async function POST(req: Request) {
 
     if (type === 'related') {
       const existingTitles = graph?.nodes?.map((n: { title: string }) => n.title).join(', ') || '';
+      const notesText = currentNode?.notes?.length
+        ? `\n用户在该知识点上的笔记：${currentNode.notes.join('；')}`
+        : '';
       const result = await generateObject({
         model: getModel(),
         schema: recommendationSchema,
-        prompt: `用户正在学习"${currentNode?.title || '未知'}"，内容是：${currentNode?.content || ''}
+        prompt: `用户正在学习“${currentNode?.title || '未知'}”，内容是：${currentNode?.content || ''}${notesText}
 用户已学过的知识：${existingTitles}
 
 推荐 3-5 个与当前知识相关、但用户尚未学习的延伸方向。

@@ -104,8 +104,14 @@ description: Memos 项目标准开发工作流：需求→PRD→Tasks→Mileston
 
 1. **按依赖顺序**：先完成无依赖的 Task，再推进有依赖的
 2. **并行加速**：无依赖关系的 Task 使用子 Agent 并行实现
-3. **每完成一个 Task**：确认 `npm run build` 无错误
+3. **每完成一个 Task**：用 `npm run typecheck`（`tsc --noEmit`）验证零错误
 4. **代码规范**：TypeScript 严格模式，无 any，有基本注释
+
+> ⚠️ **【重要】验证方式约束（防止开发缓存损坏）**
+> - 日常验证**只用** `npm run typecheck`，它不触碰 `.next` 目录
+> - **严禁**在开发服务器运行时执行 `npm run build` / `npx next build`——生产构建（webpack）与开发服务器（Turbopack）共用 `.next` 目录，会覆盖开发缓存导致页面打不开（ENOENT / chunk 404）
+> - 开发服务器统一用 `npm run dev`（Turbopack）；如确需生产构建，必须先停掉 dev server
+> - 万一页面打不开且报 ENOENT/chunk 404：`pkill -9 -f "next"; rm -rf .next; npm run dev`
 
 ### 子 Agent 并行策略
 
@@ -123,7 +129,7 @@ description: Memos 项目标准开发工作流：需求→PRD→Tasks→Mileston
 
 | 验收维度 | 检查内容 |
 |----------|----------|
-| 构建 | `npm run build` 零错误 |
+| 类型检查 | `npm run typecheck` 零错误（不用 next build，避免污染开发缓存） |
 | UI 交互 | 使用 Browser Agent 实际操作验证 |
 | 核心数据流 | 完整闭环（如：对话→节点生成→画布更新） |
 | 持久化 | 刷新页面数据不丢失 |

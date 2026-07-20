@@ -27,6 +27,27 @@ interface SimLink {
   target: string;
 }
 
+/** 边界约束力：当节点超出半径时 gentle 拉回，防止无限向外扩散 */
+function forceContain(radius: number, strength: number) {
+  let containedNodes: SimNode[] = [];
+  function force(alpha: number) {
+    for (const node of containedNodes) {
+      const x = node.x ?? 0;
+      const y = node.y ?? 0;
+      const dist = Math.sqrt(x * x + y * y);
+      if (dist > radius && dist > 0) {
+        const pull = ((dist - radius) / dist) * strength * alpha;
+        node.vx = (node.vx ?? 0) - x * pull;
+        node.vy = (node.vy ?? 0) - y * pull;
+      }
+    }
+  }
+  force.initialize = (n: SimNode[]) => {
+    containedNodes = n;
+  };
+  return force;
+}
+
 export function useForceSimulation(
   nodes: KnowledgeNode[],
   edges: KnowledgeEdge[],
@@ -62,11 +83,12 @@ export function useForceSimulation(
           .distance(80)
           .strength(0.6),
       )
-      .force('charge', forceManyBody().strength(-100).distanceMax(300))
-      .force('center', forceCenter(0, 0).strength(0.1))
+      .force('charge', forceManyBody().strength(-80).distanceMax(260))
+      .force('center', forceCenter(0, 0).strength(0.08))
       .force('collide', forceCollide(25))
+      .force('contain', forceContain(900, 0.35)) // 边界约束：超出 900 半径拉回，防止无限扩散
       .alphaDecay(0.05) // 快速收敛，约2秒后停止
-      .velocityDecay(0.5) // 阻尼
+      .velocityDecay(0.55) // 阻尼
       .on('tick', () => {
         const positions = new Map<string, { x: number; y: number }>();
         for (const node of nodesRef.current) {
@@ -86,11 +108,11 @@ export function useForceSimulation(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes.length, edges.length]);
 
-  // 拖拽开始时固定节点并重新激活模拟
+  // 拖拽开始时固定节点并温和重新激活模拟（低能量，避免其他节点被持续推飞）
   const dragStart = useCallback((nodeId: string) => {
     const sim = simRef.current;
     if (!sim) return;
-    sim.alphaTarget(0.1).restart();
+    sim.alphaTarget(0.04).restart();
     const node = nodesRef.current.find((n) => n.id === nodeId);
     if (node) {
       node.fx = node.x;

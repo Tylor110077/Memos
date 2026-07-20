@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { DomainModal } from '@/components/domain/DomainModal';
 import { ImportMaterialModal } from '@/components/canvas/ImportMaterialModal';
@@ -9,6 +9,8 @@ import { RightPanel } from '@/components/panel/RightPanel';
 import { useGraphStore } from '@/stores/graphStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useBoardStore } from '@/stores/boardStore';
+import { useChatStore } from '@/stores/chatStore';
+import { useShortcuts } from '@/hooks/useShortcuts';
 
 // React Flow 不支持 SSR，需要动态导入
 const Canvas = dynamic(
@@ -20,6 +22,29 @@ export default function Home() {
   const { initializeGraph, isInitialized } = useGraphStore();
   const { importModalOpen, closeImportModal } = useUIStore();
   const { initializeBoards, isInitialized: boardsReady, currentBoardId } = useBoardStore();
+
+  // 全局快捷键
+  const shortcutHandlers = useMemo(
+    () => ({
+      focusChat: () => {
+        useChatStore.getState().setChatPanelOpen(true);
+        // 等待面板渲染后聚焦输入框
+        setTimeout(() => {
+          const el = document.getElementById('chat-input');
+          el?.focus();
+        }, 50);
+      },
+      newChat: () => {
+        useChatStore.getState().setChatPanelOpen(true);
+        useChatStore.getState().triggerReset();
+      },
+      fitView: () => {
+        window.dispatchEvent(new CustomEvent('studyboard:fit-view'));
+      },
+    }),
+    [],
+  );
+  useShortcuts(shortcutHandlers);
 
   // 初始化画板
   useEffect(() => {

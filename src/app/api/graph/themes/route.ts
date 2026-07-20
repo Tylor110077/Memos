@@ -12,16 +12,21 @@ const themeSchema = z.object({
 
 export async function POST(req: Request) {
   try {
-    const { nodes } = await req.json();
+    const { nodes, scope } = await req.json();
+    const isSelected = scope === 'selected';
 
-    // 只分析 concept 类型的节点
-    const conceptNodes = nodes.filter((n: { type: string }) => n.type === 'concept');
+    // 'selected' 模式：用户已明确选中要分组的节点，全部参与，≥2 即可
+    // 'all' 模式：只分析 concept 类型，≥3 才归纳
+    const candidateNodes = isSelected
+      ? nodes
+      : nodes.filter((n: { type: string }) => n.type === 'concept');
+    const minCount = isSelected ? 2 : 3;
 
-    if (conceptNodes.length < 3) {
+    if (candidateNodes.length < minCount) {
       return Response.json({ themes: [] });
     }
 
-    const nodesText = conceptNodes
+    const nodesText = candidateNodes
       .map((n: { title: string; content: string }) => `- ${n.title}: ${n.content?.slice(0, 100) || ''}`)
       .join('\n');
 
@@ -34,11 +39,12 @@ export async function POST(req: Request) {
 ${nodesText}
 
 规则：
-- 只有当 3 个或以上节点在语义上明确相关时，才归纳为一个主题
+- 只有当 ${minCount} 个或以上节点在语义上明确相关时，才归纳为一个主题
 - 主题名称应简洁（2-6个字），如"LLM基础"、"排序算法"、"概率论"
 - 不要强行分组，如果节点之间没有明显关联就不归纳
 - 一个节点可以属于多个主题
-- 最多生成 3 个主题`,
+- 最多生成 3 个主题
+- 【重要】childNodeTitles 中的每个标题必须与上方列表中的节点标题逐字完全一致，不要改写、截断或翻译`,
     });
 
     return Response.json(result.object);

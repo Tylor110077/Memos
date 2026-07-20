@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Globe, Link2, Maximize, ZoomIn, ZoomOut, Dices, Download, FolderTree, Loader2 } from 'lucide-react';
+import { Globe, Link2, Maximize, ZoomIn, ZoomOut, Dices, Download, FolderTree, Combine, Loader2, Settings } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
 import { nanoid } from 'nanoid';
 import { useUIStore } from '@/stores/uiStore';
@@ -9,7 +9,7 @@ import { useGraphStore } from '@/stores/graphStore';
 import { useBoardStore } from '@/stores/boardStore';
 import type { KnowledgeNode, KnowledgeEdge } from '@/types';
 import { BreakthroughModal } from './BreakthroughModal';
-import { ThemeSwitcher } from '@/components/ThemeSwitcher';
+import { SettingsModal } from '@/components/settings/SettingsModal';
 
 interface ThemeResult {
   title: string;
@@ -22,12 +22,28 @@ interface ToolbarProps {
   selectedNodeIds?: Set<string>;
 }
 
+/** 工具栏按钮悬停提示（右侧弹出，风格统一） */
+function Tip({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="relative group/tip">
+      {children}
+      <div
+        className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2.5 px-2.5 py-1.5 rounded-md border border-[var(--border-strong)] bg-[var(--bg-primary)] text-xs text-[var(--text-primary)] whitespace-nowrap shadow-lg opacity-0 translate-x-1 group-hover/tip:opacity-100 group-hover/tip:translate-x-0 transition-all duration-150 z-50"
+      >
+        {label}
+        <span className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent border-r-[var(--bg-primary)]" />
+      </div>
+    </div>
+  );
+}
+
 export function Toolbar({ selectedNodeIds }: ToolbarProps) {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   const openDomainModal = useUIStore((s) => s.openDomainModal);
   const openImportModal = useUIStore((s) => s.openImportModal);
   const currentBoardId = useBoardStore((s) => s.currentBoardId);
   const [breakthroughOpen, setBreakthroughOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [summarizing, setSummarizing] = useState<'all' | 'selected' | null>(null);
 
   const selectionCount = selectedNodeIds?.size ?? 0;
@@ -41,6 +57,7 @@ export function Toolbar({ selectedNodeIds }: ToolbarProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          scope: target,
           nodes: sourceNodes.map((n) => ({ type: n.type, title: n.title, content: n.content })),
         }),
       });
@@ -54,7 +71,15 @@ export function Toolbar({ selectedNodeIds }: ToolbarProps) {
       const newEdges: KnowledgeEdge[] = [];
 
       for (const theme of themes) {
-        const children = sourceNodes.filter((n) => theme.childNodeTitles.includes(n.title));
+        // 健壮的标题匹配：先精确，再归一化，后部分包含
+        const norm = (s: string) => s.trim().toLowerCase();
+        const matchTitle = (nodeTitle: string) =>
+          theme.childNodeTitles.some((t) => {
+            const nt = norm(t);
+            const nn = norm(nodeTitle);
+            return nt === nn || nt.includes(nn) || nn.includes(nt);
+          });
+        const children = sourceNodes.filter((n) => matchTitle(n.title));
         if (children.length === 0) continue;
 
         // 主题节点放在子节点的质心上方
@@ -132,99 +157,84 @@ export function Toolbar({ selectedNodeIds }: ToolbarProps) {
   return (
     <>
     <div className="absolute top-4 left-4 z-10 flex flex-col gap-1 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)]/80 backdrop-blur-sm p-1.5 shadow-lg">
-      <button
-        onClick={openDomainModal}
-        className={buttonClass}
-        title="生成领域图谱"
-      >
-        <Globe size={18} />
-      </button>
+      <Tip label="生成领域图谱">
+        <button onClick={openDomainModal} className={buttonClass}>
+          <Globe size={18} />
+        </button>
+      </Tip>
 
-      <button
-        onClick={openImportModal}
-        className={buttonClass}
-        title="导入材料"
-      >
-        <Link2 size={18} />
-      </button>
+      <Tip label="导入学习材料（链接/文件）">
+        <button onClick={openImportModal} className={buttonClass}>
+          <Link2 size={18} />
+        </button>
+      </Tip>
 
-      <button
-        onClick={handleSummarizeAll}
-        className={buttonClass}
-        title="自动归纳主题"
-        disabled={summarizing !== null}
-      >
-        {summarizing === 'all' ? <Loader2 size={18} className="animate-spin" /> : <FolderTree size={18} />}
-      </button>
+      <Tip label="自动归纳主题">
+        <button onClick={handleSummarizeAll} className={buttonClass} disabled={summarizing !== null}>
+          {summarizing === 'all' ? <Loader2 size={18} className="animate-spin" /> : <FolderTree size={18} />}
+        </button>
+      </Tip>
 
-      {/* 归纳选中节点：常驻显示，选中 ≥2 个节点时可用 */}
-      <button
-        onClick={handleSummarizeSelected}
-        disabled={selectionCount < 2 || summarizing !== null}
-        className={
-          selectionCount >= 2
-            ? 'flex items-center gap-1.5 px-2 py-1.5 rounded-md whitespace-nowrap text-[11px] font-medium bg-[var(--accent-soft)] text-[var(--accent)] hover:brightness-125 disabled:opacity-40 disabled:pointer-events-none transition-all'
-            : 'flex items-center gap-1.5 px-2 py-1.5 rounded-md whitespace-nowrap text-[11px] font-medium text-[var(--text-secondary)] opacity-50 cursor-not-allowed transition-all'
-        }
-        title={
-          selectionCount >= 2
-            ? '基于选中节点归纳主题'
-            : 'Shift+点击画布中的节点选择多个，再进行归纳'
-        }
-      >
-        {summarizing === 'selected' ? <Loader2 size={14} className="animate-spin" /> : <FolderTree size={14} />}
-        {selectionCount >= 2 ? `归纳选中 (${selectionCount})` : '归纳选中'}
-      </button>
+      {/* 归纳选中节点：图标按钮 + 数量角标，选中 ≥2 个节点时可用 */}
+      <Tip label={selectionCount >= 2 ? `归纳选中的 ${selectionCount} 个节点` : 'Shift+点击选择多个节点后归纳'}>
+        <button
+          onClick={handleSummarizeSelected}
+          disabled={selectionCount < 2 || summarizing !== null}
+          className={`${buttonClass} relative`}
+        >
+          {summarizing === 'selected' ? <Loader2 size={18} className="animate-spin" /> : <Combine size={18} />}
+          {selectionCount >= 2 && (
+            <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 rounded-full bg-[var(--accent)] text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
+              {selectionCount}
+            </span>
+          )}
+        </button>
+      </Tip>
 
-      <button
-        onClick={() => setBreakthroughOpen(true)}
-        className={buttonClass}
-        title="给我个惊喜"
-      >
-        <Dices size={18} />
-      </button>
+      <Tip label="给我个惊喜（随机知识）">
+        <button onClick={() => setBreakthroughOpen(true)} className={buttonClass}>
+          <Dices size={18} />
+        </button>
+      </Tip>
 
-      <button
-        onClick={handleExport}
-        className={buttonClass}
-        title="导出图谱"
-      >
-        <Download size={18} />
-      </button>
+      <Tip label="导出图谱为 JSON">
+        <button onClick={handleExport} className={buttonClass}>
+          <Download size={18} />
+        </button>
+      </Tip>
 
       <div className="my-1 border-t border-[var(--border)]" />
 
-      <button
-        onClick={() => fitView({ duration: 300 })}
-        className={buttonClass}
-        title="适配视图"
-      >
-        <Maximize size={18} />
-      </button>
+      <Tip label="适配视图">
+        <button onClick={() => fitView({ duration: 300 })} className={buttonClass}>
+          <Maximize size={18} />
+        </button>
+      </Tip>
 
-      <button
-        onClick={() => zoomIn({ duration: 200 })}
-        className={buttonClass}
-        title="放大"
-      >
-        <ZoomIn size={18} />
-      </button>
+      <Tip label="放大">
+        <button onClick={() => zoomIn({ duration: 200 })} className={buttonClass}>
+          <ZoomIn size={18} />
+        </button>
+      </Tip>
 
-      <button
-        onClick={() => zoomOut({ duration: 200 })}
-        className={buttonClass}
-        title="缩小"
-      >
-        <ZoomOut size={18} />
-      </button>
+      <Tip label="缩小">
+        <button onClick={() => zoomOut({ duration: 200 })} className={buttonClass}>
+          <ZoomOut size={18} />
+        </button>
+      </Tip>
     
       <div className="my-1 border-t border-[var(--border)]" />
-    
-      <ThemeSwitcher />
+
+      <Tip label="设置">
+        <button onClick={() => setSettingsOpen(true)} className={buttonClass}>
+          <Settings size={18} />
+        </button>
+      </Tip>
     
       {/* 破茧推荐弹窗（渲染在 Toolbar 外层，以避免 fixed 定位被影响） */}
     </div>
     <BreakthroughModal visible={breakthroughOpen} onClose={() => setBreakthroughOpen(false)} />
+    <SettingsModal visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>
   );
 }

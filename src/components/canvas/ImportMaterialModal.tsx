@@ -240,7 +240,7 @@ export function ImportMaterialModal({ visible, onClose }: ImportMaterialModalPro
         <div className="mb-5 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-[var(--text-primary)]">
             <Upload size={20} />
-            导入学习材料
+            导入材料
           </h2>
           <button
             onClick={handleClose}

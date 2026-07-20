@@ -44,9 +44,9 @@ export function BoardSelector() {
       {isOpen && (
         <div className="mt-1 w-[200px] rounded-lg bg-[var(--bg-secondary)]/95 border border-[var(--border)] shadow-xl py-1 backdrop-blur-sm">
           {boards.map(board => (
-            <div key={board.id} className="flex items-center group px-2">
+            <div key={board.id} className={`group flex items-center px-1 rounded-md transition-colors ${board.id === currentBoardId ? 'bg-[var(--accent-soft)]' : 'hover:bg-[var(--bg-hover)]'}`}>
               {editingId === board.id ? (
-                <div className="flex items-center gap-1 flex-1 py-1">
+                <div className="flex items-center gap-1 flex-1 py-1 px-1">
                   <input
                     value={editName}
                     onChange={e => setEditName(e.target.value)}
@@ -61,16 +61,16 @@ export function BoardSelector() {
                 <>
                   <button
                     onClick={() => { switchBoard(board.id); setIsOpen(false); }}
-                    className={`flex-1 text-left px-2 py-1.5 text-sm rounded ${board.id === currentBoardId ? 'text-[var(--accent)] bg-[var(--accent-soft)]' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'}`}
+                    className={`flex-1 text-left px-2 py-1.5 text-sm rounded ${board.id === currentBoardId ? 'text-[var(--accent)]' : 'text-[var(--text-primary)]'}`}
                   >
                     {board.name}
                   </button>
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => { setEditingId(board.id); setEditName(board.name); }} className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                    <button onClick={() => { setEditingId(board.id); setEditName(board.name); }} className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]">
                       <Pencil size={11} />
                     </button>
                     {boards.length > 1 && (
-                      <button onClick={() => deleteBoard(board.id)} className="p-1 text-[var(--text-muted)] hover:text-red-400">
+                      <button onClick={() => deleteBoard(board.id)} className="p-1 rounded text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--bg-hover)]">
                         <Trash2 size={11} />
                       </button>
                     )}

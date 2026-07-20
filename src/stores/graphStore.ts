@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import type { KnowledgeNode, KnowledgeEdge, GraphChanges } from '@/types';
+import type { KnowledgeNode, KnowledgeEdge, GraphChanges, NoteEntry, NoteKind } from '@/types';
 import * as dbOps from '@/lib/db';
+import { nanoid } from 'nanoid';
 
 interface GraphState {
   nodes: KnowledgeNode[];
@@ -19,6 +20,7 @@ interface GraphState {
   selectEdge: (id: string | null) => void;
   applyGraphChanges: (changes: GraphChanges) => void;
   updateNodePosition: (id: string, position: { x: number; y: number }) => void;
+  addNoteToNode: (nodeId: string, content: string, kind: NoteKind) => void;
 }
 
 export const useGraphStore = create<GraphState>((set, get) => ({
@@ -105,5 +107,17 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       nodes: state.nodes.map((n) => (n.id === id ? { ...n, position } : n)),
     }));
     dbOps.updateNode(id, { position }).catch(console.error);
+  },
+
+  // 给节点追加一条笔记
+  addNoteToNode: (nodeId, content, kind) => {
+    const note: NoteEntry = { id: nanoid(), content, kind, createdAt: new Date().toISOString() };
+    set((state) => ({
+      nodes: state.nodes.map((n) =>
+        n.id === nodeId ? { ...n, notes: [...(n.notes || []), note] } : n,
+      ),
+    }));
+    const node = get().nodes.find((n) => n.id === nodeId);
+    if (node) dbOps.updateNode(nodeId, { notes: node.notes }).catch(console.error);
   },
 }));

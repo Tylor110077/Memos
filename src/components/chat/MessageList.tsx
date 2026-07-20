@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import type { Message } from 'ai';
 import MessageBubble from './MessageBubble';
+import { Logo } from '@/components/Logo';
 
 interface MessageListProps {
   messages: Message[];
@@ -20,9 +21,11 @@ export default function MessageList({ messages, selectedMessages, onSelectChange
   if (messages.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-4">
+        {/* 品牌 Logo */}
+        <Logo size={72} className="rounded-2xl shadow-lg shadow-black/30" />
         {/* 品牌字 */}
         <h1
-          className="text-4xl font-semibold italic tracking-[0.2em] bg-gradient-to-r from-[var(--accent)] to-[var(--text-primary)] bg-clip-text text-transparent"
+          className="text-4xl font-semibold italic tracking-[0.06em] bg-gradient-to-r from-[var(--accent)] to-[var(--text-primary)] bg-clip-text text-transparent"
           style={{ fontFamily: '"Palatino Linotype", "Book Antiqua", Palatino, serif' }}
         >
           Memos
@@ -34,7 +37,7 @@ export default function MessageList({ messages, selectedMessages, onSelectChange
           <span className="w-8 h-px bg-[var(--border)]" />
         </div>
         {/* 模式提示 */}
-        <p className="text-xs text-[var(--text-muted)] mt-2">向 AI 提问，即可生成知识节点</p>
+        <p className="text-xs text-[var(--text-muted)] mt-2 tracking-wider">让每一次好奇，都长成知识的形状</p>
       </div>
     );
   }

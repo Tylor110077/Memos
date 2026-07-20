@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { nanoid } from 'nanoid';
 import { useUIStore } from '@/stores/uiStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { useGraphStore } from '@/stores/graphStore';
 import { useChatStore } from '@/stores/chatStore';
 import ReactMarkdown from 'react-markdown';
-import { X, Edit2, Trash2, Save, Split, Loader2, MessageSquare, Lightbulb, BookOpen, Info, RefreshCw } from 'lucide-react';
+import { X, Edit2, Trash2, Save, Split, Loader2, MessageSquare, Lightbulb, BookOpen, Info, RefreshCw, Sparkles, StickyNote } from 'lucide-react';
 import { getCachedRecommendations, saveRecommendations, clearRecommendations } from '@/lib/db';
-import type { NodeType, KnowledgeNode, KnowledgeEdge } from '@/types';
+import type { NodeType, KnowledgeNode, KnowledgeEdge, NoteEntry } from '@/types';
 
 interface RelatedRecommendation {
   title: string;
@@ -32,8 +33,21 @@ const typeColors: Record<NodeType, string> = {
   question: 'bg-red-500/20 text-red-400',
 };
 
+const noteKindLabels: Record<NoteEntry['kind'], string> = {
+  manual: '手动',
+  chat: '对话摘录',
+  question: '我的提问',
+};
+
+const noteKindColors: Record<NoteEntry['kind'], string> = {
+  manual: 'bg-blue-500/20 text-blue-400',
+  chat: 'bg-purple-500/20 text-purple-400',
+  question: 'bg-amber-500/20 text-amber-400',
+};
+
 export function NodeDetail() {
   const { nodeDetailOpen, nodeDetailId, closeNodeDetail } = useUIStore();
+  const { autoRecommend } = useSettingsStore();
   const { nodes, edges, updateNode, removeNode, applyGraphChanges } = useGraphStore();
   const { setPendingMessage, setChatPanelOpen } = useChatStore();
   const [isEditing, setIsEditing] = useState(false);
@@ -46,26 +60,67 @@ export function NodeDetail() {
   const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [expandedIdx, setExpandedIdx] = useState<string | null>(null);
+  const inFlightNodeRef = useRef<string | null>(null); // 防止同一节点重复并发请求
 
   const node = nodes.find((n) => n.id === nodeDetailId);
 
-  // 调用推荐 API（不处理缓存与 loading 状态）
+  // 调用推荐 API（带重试，不处理缓存与 loading 状态）
   const requestRecommendations = useCallback(async (targetNode: KnowledgeNode): Promise<RelatedRecommendation[]> => {
-    const res = await fetch('/api/recommend', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        currentNode: { title: targetNode.title, content: targetNode.content },
-        graph: { nodes: nodes.map(n => ({ title: n.title, type: n.type, level: n.level })), edges: [] },
-        type: 'related',
-      }),
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.recommendations || []).slice(0, 3);
+    const doFetch = async (): Promise<RelatedRecommendation[]> => {
+      const res = await fetch('/api/recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentNode: { title: targetNode.title, content: targetNode.content, notes: (targetNode.notes || []).map(n => n.content) },
+          graph: { nodes: nodes.map(n => ({ title: n.title, type: n.type, level: n.level })), edges: [] },
+          type: 'related',
+        }),
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data.recommendations || []).slice(0, 3);
+    };
+    // 首次失败/为空时重试一次，减少"暂无推荐"的误报
+    let recs = await doFetch();
+    if (recs.length === 0) {
+      recs = await doFetch();
+    }
+    return recs;
   }, [nodes]);
 
-  // 当面板打开时自动获取相关推荐：优先读 IndexedDB 缓存，命中则立即显示、不发请求
+  // 加载推荐（优先缓存，未命中则请求 API 并写入缓存），带防重复并发
+  const loadRecommendations = useCallback(async (targetNode: KnowledgeNode, cancelledRef: { current: boolean }) => {
+    // 1. 先查缓存
+    try {
+      const cached = await getCachedRecommendations(targetNode.id);
+      if (cached && cached.length > 0) {
+        if (!cancelledRef.current) setRelatedRecommendations(cached as RelatedRecommendation[]);
+        return;
+      }
+    } catch (error) {
+      console.error('读取推荐缓存失败:', error);
+    }
+    // 2. 缓存未命中 → 请求 API 并写入缓存
+    if (cancelledRef.current) return;
+    if (inFlightNodeRef.current === targetNode.id) return;
+    inFlightNodeRef.current = targetNode.id;
+    setIsLoadingRecommendations(true);
+    try {
+      const recs = await requestRecommendations(targetNode);
+      if (cancelledRef.current) return;
+      setRelatedRecommendations(recs);
+      if (recs.length > 0) {
+        await saveRecommendations(targetNode.id, targetNode.boardId, recs);
+      }
+    } catch (error) {
+      console.error('获取相关推荐失败:', error);
+    } finally {
+      if (inFlightNodeRef.current === targetNode.id) inFlightNodeRef.current = null;
+      if (!cancelledRef.current) setIsLoadingRecommendations(false);
+    }
+  }, [requestRecommendations]);
+
+  // 当面板打开时：根据设置决定是否自动加载推荐
   useEffect(() => {
     setExpandedIdx(null);
     if (!nodeDetailOpen || !node) {
@@ -73,37 +128,24 @@ export function NodeDetail() {
       setIsLoadingRecommendations(false);
       return;
     }
-    let cancelled = false;
-    (async () => {
-      // 1. 先查缓存
-      try {
-        const cached = await getCachedRecommendations(node.id);
-        if (cached && cached.length > 0) {
-          if (!cancelled) setRelatedRecommendations(cached as RelatedRecommendation[]);
-          return;
-        }
-      } catch (error) {
-        console.error('读取推荐缓存失败:', error);
-      }
-      // 2. 缓存未命中 → 请求 API 并写入缓存
-      if (cancelled) return;
-      setIsLoadingRecommendations(true);
-      try {
-        const recs = await requestRecommendations(node);
-        if (cancelled) return;
-        setRelatedRecommendations(recs);
-        if (recs.length > 0) {
-          await saveRecommendations(node.id, node.boardId, recs);
-        }
-      } catch (error) {
-        console.error('获取相关推荐失败:', error);
-      } finally {
-        if (!cancelled) setIsLoadingRecommendations(false);
-      }
-    })();
-    return () => { cancelled = true; };
+    // 关闭自动推荐时，不自动加载，等用户点击"生成相关推荐"
+    if (!autoRecommend) {
+      setRelatedRecommendations([]);
+      setIsLoadingRecommendations(false);
+      return;
+    }
+    const cancelledRef = { current: false };
+    loadRecommendations(node, cancelledRef);
+    return () => { cancelledRef.current = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodeDetailOpen, nodeDetailId]);
+  }, [nodeDetailOpen, nodeDetailId, autoRecommend]);
+
+  // 手动生成相关推荐（点击按钮触发）
+  const handleGenerateRecommendations = useCallback(() => {
+    if (!node || isLoadingRecommendations) return;
+    const cancelledRef = { current: false };
+    loadRecommendations(node, cancelledRef);
+  }, [node, isLoadingRecommendations, loadRecommendations]);
 
   // 换一批：清除缓存 → 重新请求 → 保存缓存 → 更新显示
   const handleRefreshRecommendations = useCallback(async () => {
@@ -280,6 +322,33 @@ export function NodeDetail() {
             该节点由 AI 对话生成
           </div>
         )}
+
+        {/* 笔记区 */}
+        <div className="mt-4 pt-3 border-t border-[var(--border)]">
+          <div className="flex items-center gap-1.5 mb-2">
+            <StickyNote size={13} className="text-[var(--accent)]" />
+            <span className="text-xs font-medium text-[var(--text-primary)]">笔记</span>
+          </div>
+          {(node.notes && node.notes.length > 0) ? (
+            <div className="space-y-2">
+              {node.notes.map((note) => (
+                <div key={note.id} className="px-2.5 py-2 rounded-md bg-[var(--bg-tertiary)] border border-[var(--border)]">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${noteKindColors[note.kind]}`}>
+                      {noteKindLabels[note.kind]}
+                    </span>
+                    <span className="text-[10px] text-[var(--text-muted)]">
+                      {new Date(note.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">{note.content}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[11px] text-[var(--text-muted)]">暂无笔记</p>
+          )}
+        </div>
       </div>
 
       {/* 分化表单 */}
@@ -325,17 +394,15 @@ export function NodeDetail() {
           <span className="text-xs font-medium text-[var(--text-primary)]">相关推荐</span>
           {isLoadingRecommendations && <Loader2 size={12} className="animate-spin text-[var(--text-muted)]" />}
           <span className="flex-1" />
-          {relatedRecommendations.length > 0 && (
-            <button
-              onClick={handleRefreshRecommendations}
-              disabled={isRefreshing || isLoadingRecommendations}
-              title="换一批推荐"
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <RefreshCw size={11} className={isRefreshing ? 'animate-spin' : ''} />
-              换一批
-            </button>
-          )}
+          <button
+            onClick={handleRefreshRecommendations}
+            disabled={isRefreshing || isLoadingRecommendations}
+            title="换一批推荐"
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <RefreshCw size={11} className={isRefreshing ? 'animate-spin' : ''} />
+            换一换
+          </button>
         </div>
         {relatedRecommendations.length > 0 ? (
           <div className="space-y-1.5">
@@ -381,7 +448,17 @@ export function NodeDetail() {
           </div>
         ) : (
           !isLoadingRecommendations && (
-            <p className="text-[11px] text-[var(--text-muted)]">暂无推荐</p>
+            autoRecommend ? (
+              <p className="text-[11px] text-[var(--text-muted)]">暂无推荐，点右上角“换一换”试试</p>
+            ) : (
+              <button
+                onClick={handleGenerateRecommendations}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg border border-dashed border-[var(--border-strong)] text-[11px] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
+              >
+                <Sparkles size={12} />
+                生成相关推荐
+              </button>
+            )
           )
         )}
       </div>
