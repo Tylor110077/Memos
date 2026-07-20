@@ -22,10 +22,10 @@ export default function MessageList({ messages, selectedMessages, onSelectChange
       <div className="flex-1 flex flex-col items-center justify-center gap-4">
         {/* 品牌字 */}
         <h1
-          className="text-3xl font-light tracking-widest text-[var(--text-primary)] opacity-80"
-          style={{ fontFamily: 'Georgia, serif' }}
+          className="text-4xl font-semibold italic tracking-[0.2em] bg-gradient-to-r from-[var(--accent)] to-[var(--text-primary)] bg-clip-text text-transparent"
+          style={{ fontFamily: '"Palatino Linotype", "Book Antiqua", Palatino, serif' }}
         >
-          memos
+          Memos
         </h1>
         {/* 点缀 */}
         <div className="flex items-center gap-2 text-[var(--text-muted)]">

@@ -1,15 +1,14 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Info, Lightbulb, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { MessageSquare, Info, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import ChatPanel from '@/components/chat/ChatPanel';
 import { NodeDetail } from '@/components/node/NodeDetail';
-import { RecommendPanel } from './RecommendPanel';
 import { useGraphStore } from '@/stores/graphStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useChatStore } from '@/stores/chatStore';
 
-type TabId = 'chat' | 'detail' | 'recommend';
+type TabId = 'chat' | 'detail';
 
 const MIN_WIDTH = 280;
 const MAX_WIDTH = 600;
@@ -81,7 +80,6 @@ export function RightPanel() {
   const tabs = [
     { id: 'chat' as TabId, icon: MessageSquare, label: '对话' },
     { id: 'detail' as TabId, icon: Info, label: '详情' },
-    { id: 'recommend' as TabId, icon: Lightbulb, label: '推荐' },
   ];
 
   return (
@@ -103,6 +101,7 @@ export function RightPanel() {
           isResizing ? '' : 'transition-[width] duration-300 ease-in-out'
         }`}
         style={{ width: collapsed ? 0 : width }}
+        suppressHydrationWarning
       >
         {/* 拖拽手柄 */}
         <div
@@ -115,6 +114,7 @@ export function RightPanel() {
         <div
           className="flex flex-col overflow-hidden flex-shrink-0 border-l border-[var(--border)] bg-[var(--bg-secondary)]"
           style={{ width: width - 4 }}
+          suppressHydrationWarning
         >
           {/* Tab 栏 */}
           <div className="flex items-center border-b border-[var(--border)] px-2">
@@ -145,7 +145,6 @@ export function RightPanel() {
           <div className="flex-1 overflow-hidden">
             {activeTab === 'chat' && <ChatPanel visible={true} onClose={() => setCollapsed(true)} />}
             {activeTab === 'detail' && <NodeDetail />}
-            {activeTab === 'recommend' && <RecommendPanel />}
           </div>
         </div>
       </div>

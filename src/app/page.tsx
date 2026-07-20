@@ -26,12 +26,12 @@ export default function Home() {
     if (!boardsReady) initializeBoards();
   }, [boardsReady, initializeBoards]);
 
-  // 画板就绪后加载图谱
+  // 画板切换时重新加载图谱
   useEffect(() => {
-    if (boardsReady && currentBoardId && !isInitialized) {
+    if (boardsReady && currentBoardId) {
       initializeGraph(currentBoardId);
     }
-  }, [boardsReady, currentBoardId, isInitialized, initializeGraph]);
+  }, [boardsReady, currentBoardId, initializeGraph]);
 
   return (
     <div className="h-screen w-screen flex overflow-hidden bg-[var(--bg-primary)]">
