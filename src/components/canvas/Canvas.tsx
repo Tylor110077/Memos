@@ -30,12 +30,14 @@ import { BoardSelector } from './BoardSelector';
 import { useForceSimulation } from '@/lib/useForceSimulation';
 
 function CanvasInner() {
-  const { nodes: storeNodes, edges: storeEdges, selectedNodeId } = useGraphStore();
-  const { updateNodePosition, selectNode, addEdge, removeEdge, removeNode } = useGraphStore();
+  const { nodes: storeNodes, edges: storeEdges, selectedNodeId, selectedEdgeId } = useGraphStore();
+  const { updateNodePosition, selectNode, selectEdge, addEdge, removeEdge, removeNode } = useGraphStore();
   const { openFullScreen, openNodeDetail } = useUIStore();
   const { currentBoardId } = useBoardStore();
   const reactFlowInstance = useReactFlow();
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  // Shift+Click 多选状态（T-421）
+  const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
   const isDraggingRef = useRef(false);
   const draggingNodeIdRef = useRef<string | null>(null);
   const hoverClearTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -77,11 +79,12 @@ function CanvasInner() {
             ...n,
             isDimmed: isHoverDimmed,
             isHovered: n.id === hoveredNodeId,
+            isMultiSelected: multiSelectedIds.has(n.id),
           } as unknown as Record<string, unknown>,
           selected: n.id === selectedNodeId,
         };
       }),
-    [storeNodes, selectedNodeId, highlightedIds, hoveredNodeId],
+    [storeNodes, selectedNodeId, highlightedIds, hoveredNodeId, multiSelectedIds],
   );
 
   // 转换边
@@ -96,10 +99,14 @@ function CanvasInner() {
           source: e.source,
           target: e.target,
           type: 'knowledge',
-          data: { isDimmed: isHoverDimmed, isHighlighted: highlightedIds ? highlightedIds.has(e.source) && highlightedIds.has(e.target) : false } as unknown as Record<string, unknown>,
+          data: {
+            isDimmed: isHoverDimmed,
+            isHighlighted: highlightedIds ? highlightedIds.has(e.source) && highlightedIds.has(e.target) : false,
+            isSelected: e.id === selectedEdgeId,
+          } as unknown as Record<string, unknown>,
         };
       }),
-    [storeEdges, highlightedIds],
+    [storeEdges, highlightedIds, selectedEdgeId],
   );
 
   // 节点拖拽结束：保存位置 + 近距离连线
@@ -176,7 +183,23 @@ function CanvasInner() {
     [addEdge, currentBoardId],
   );
 
-  const onNodeClick: NodeMouseHandler = useCallback((_, node) => { selectNode(node.id); openNodeDetail(node.id); }, [selectNode, openNodeDetail]);
+  const onNodeClick: NodeMouseHandler = useCallback((event, node) => {
+    // Shift+Click：toggle 多选（T-421）
+    if (event.shiftKey) {
+      setMultiSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(node.id)) {
+          next.delete(node.id);
+        } else {
+          next.add(node.id);
+        }
+        return next;
+      });
+      return;
+    }
+    selectNode(node.id);
+    openNodeDetail(node.id);
+  }, [selectNode, openNodeDetail]);
   const onNodeDoubleClick: NodeMouseHandler = useCallback((_, node) => { openFullScreen(node.id); }, [openFullScreen]);
   const onNodeMouseEnter: NodeMouseHandler = useCallback((_, node) => {
     if (isDraggingRef.current) return;
@@ -189,7 +212,24 @@ function CanvasInner() {
     // 延迟 50ms 清除，如果 50ms 内进入了另一个节点则不会闪烁
     hoverClearTimeout.current = setTimeout(() => setHoveredNodeId(null), 50);
   }, []);
-  const onPaneClick = useCallback(() => { selectNode(null); }, [selectNode]);
+  const onEdgeClick = useCallback((_: any, edge: Edge) => { selectEdge(edge.id); }, [selectEdge]);
+  const onPaneClick = useCallback(() => { selectNode(null); setMultiSelectedIds(new Set()); }, [selectNode]);
+
+  // Delete/Backspace 删除选中的边（T-441）
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      const { selectedEdgeId: edgeId, removeEdge: delEdge } = useGraphStore.getState();
+      if (edgeId) {
+        e.preventDefault();
+        delEdge(edgeId);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // 切换画板后自动居中
   useEffect(() => {
@@ -215,6 +255,7 @@ function CanvasInner() {
         onNodeDragStop={onNodeDragStop}
         onNodeMouseEnter={onNodeMouseEnter}
         onNodeMouseLeave={onNodeMouseLeave}
+        onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
         fitView
         zoomOnDoubleClick={false}
@@ -235,7 +276,7 @@ function CanvasInner() {
         </div>
       )}
 
-      <Toolbar />
+      <Toolbar selectedNodeIds={multiSelectedIds} />
       <BoardSelector />
     </div>
   );

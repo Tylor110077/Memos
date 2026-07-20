@@ -1,6 +1,6 @@
 ---
 name: dev-workflow
-description: 标准开发工作流程：先写PRD和tasks再开发，分Phase实施，每Phase完成后强制验收测试，通过后才进入下一阶段。当用户要求开始新功能开发、启动新阶段、或提到"按流程来"、"先写PRD"、"开始开发"、"验收"时触发。
+description: Memos 项目标准开发工作流：需求→PRD→Tasks→Milestone→分Phase实现→验收→Git Push。包含硬性 Milestone 门槛（不完成不通过）、每阶段强制端到端验收、验收后自动推送 GitHub。当用户提到“按流程来”、“先写PRD”、“开始开发”、“验收”、“milestone”、“推送”时触发。
 ---
 
 # 标准开发工作流程

@@ -20,6 +20,7 @@ export function DotNode({ data, selected }: NodeProps) {
   const node = data as Record<string, any>;
   const isDimmed: boolean = node.isDimmed ?? false;
   const isHovered: boolean = node.isHovered ?? false;
+  const isMultiSelected: boolean = node.isMultiSelected ?? false;
   const isUnlit: boolean = node.status === 'unlit';
   const level: number = node.level ?? 2;
   const title: string = node.title ?? '';
@@ -45,7 +46,9 @@ export function DotNode({ data, selected }: NodeProps) {
         className="w-full h-full rounded-full transition-transform duration-150"
         style={{
           backgroundColor: color,
-          boxShadow: isHovered || selected ? `0 0 8px ${color}` : 'none',
+          boxShadow: isMultiSelected
+            ? `0 0 0 2px var(--bg-primary), 0 0 0 3.5px var(--accent)`
+            : isHovered || selected ? `0 0 8px ${color}` : 'none',
           transform: isHovered ? 'scale(1.4)' : 'scale(1)',
         }}
       />

@@ -56,6 +56,8 @@ export type ChatMode = 'learn' | 'feynman' | 'debate' | 'design';
 export interface Conversation {
   id: string;
   nodeId?: string;
+  boardId?: string;
+  boardName?: string;
   mode: ChatMode;
   messages: ChatMessage[];
   createdAt: string;

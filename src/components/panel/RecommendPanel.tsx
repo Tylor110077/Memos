@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Lightbulb, Loader2, BookOpen } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Lightbulb, Loader2, BookOpen, RefreshCw } from 'lucide-react';
 import { useGraphStore } from '@/stores/graphStore';
 import { useChatStore } from '@/stores/chatStore';
+import { useBoardStore } from '@/stores/boardStore';
+import { getCachedRecommendations, saveRecommendations, clearRecommendations } from '@/lib/db';
 
 interface Recommendation {
   title: string;
@@ -14,32 +16,65 @@ interface Recommendation {
 export function RecommendPanel() {
   const { nodes, selectedNodeId } = useGraphStore();
   const { setPendingMessage, setChatPanelOpen } = useChatStore();
+  const { currentBoardId } = useBoardStore();
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const selectedNode = nodes.find(n => n.id === selectedNodeId);
+
+  // 从 API 获取推荐并缓存
+  const fetchFromAPI = useCallback(async (nodeId: string, skipCache = false) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+
+    if (!skipCache) {
+      const cached = await getCachedRecommendations(nodeId);
+      if (cached && cached.length > 0) {
+        setRecommendations(cached);
+        return;
+      }
+    }
+
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentNode: { title: node.title, content: node.content },
+          graph: { nodes: nodes.map(n => ({ title: n.title, type: n.type, level: n.level })), edges: [] },
+          type: 'related',
+        }),
+      });
+      const data = res.ok ? await res.json() : { recommendations: [] };
+      const results = data.recommendations || [];
+      setRecommendations(results);
+      // 缓存结果
+      if (results.length > 0 && currentBoardId) {
+        await saveRecommendations(nodeId, currentBoardId, results);
+      }
+    } catch {
+      setRecommendations([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [nodes, currentBoardId]);
 
   useEffect(() => {
     if (!selectedNode) {
       setRecommendations([]);
       return;
     }
-    setIsLoading(true);
-    fetch('/api/recommend', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        currentNode: { title: selectedNode.title, content: selectedNode.content },
-        graph: { nodes: nodes.map(n => ({ title: n.title, type: n.type, level: n.level })), edges: [] },
-        type: 'related',
-      }),
-    })
-      .then(res => res.ok ? res.json() : { recommendations: [] })
-      .then(data => setRecommendations(data.recommendations || []))
-      .catch(() => setRecommendations([]))
-      .finally(() => setIsLoading(false));
+    fetchFromAPI(selectedNode.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNode?.id]);
+
+  // 换一批：清除缓存 → 重新调 API → 保存新结果
+  const handleRefresh = useCallback(async () => {
+    if (!selectedNode) return;
+    await clearRecommendations(selectedNode.id);
+    await fetchFromAPI(selectedNode.id, true);
+  }, [selectedNode, fetchFromAPI]);
 
   const handleLearn = (title: string) => {
     setPendingMessage(`给我讲讲${title}`, null);
@@ -48,9 +83,22 @@ export function RecommendPanel() {
 
   return (
     <div className="h-full flex flex-col p-4 overflow-y-auto">
-      <h3 className="text-sm font-medium text-[var(--text-primary)] mb-1">
-        {selectedNode ? `「${selectedNode.title}」的延伸` : '知识推荐'}
-      </h3>
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="text-sm font-medium text-[var(--text-primary)]">
+          {selectedNode ? `「${selectedNode.title}」的延伸` : '知识推荐'}
+        </h3>
+        {recommendations.length > 0 && (
+          <button
+            onClick={handleRefresh}
+            disabled={isLoading}
+            className="flex items-center gap-1 px-2 py-1 text-xs rounded-md text-[var(--text-secondary)] hover:text-[var(--accent)] hover:bg-[var(--accent-soft)] disabled:opacity-50 transition-colors"
+            title="换一批推荐"
+          >
+            <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
+            换一批
+          </button>
+        )}
+      </div>
       <p className="text-xs text-[var(--text-muted)] mb-4">
         {selectedNode ? '基于当前节点推荐相关知识' : '选中一个节点查看推荐'}
       </p>

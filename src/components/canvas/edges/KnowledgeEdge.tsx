@@ -14,6 +14,7 @@ export function KnowledgeEdge({
   const edgeData = data as Record<string, any> | undefined;
   const isDimmed: boolean = edgeData?.isDimmed ?? false;
   const isHighlighted: boolean = edgeData?.isHighlighted ?? false;
+  const isSelected: boolean = edgeData?.isSelected ?? false;
 
   const [edgePath] = getStraightPath({ sourceX, sourceY, targetX, targetY });
 
@@ -22,10 +23,10 @@ export function KnowledgeEdge({
       id={id}
       path={edgePath}
       style={{
-        stroke: isHighlighted ? 'var(--text-secondary)' : 'var(--text-muted)',
-        strokeWidth: isHighlighted ? 1.5 : 1,
-        opacity: isDimmed ? 0.05 : isHighlighted ? 0.8 : 0.35,
-        transition: 'opacity 200ms, stroke 200ms',
+        stroke: isSelected ? 'var(--accent)' : isHighlighted ? 'var(--text-secondary)' : 'var(--text-muted)',
+        strokeWidth: isSelected ? 2.5 : isHighlighted ? 1.5 : 1,
+        opacity: isDimmed && !isSelected ? 0.05 : isSelected ? 1 : isHighlighted ? 0.8 : 0.35,
+        transition: 'opacity 200ms, stroke 200ms, stroke-width 200ms',
       }}
       interactionWidth={15}
     />

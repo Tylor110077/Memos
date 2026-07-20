@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import Dexie, { type EntityTable } from 'dexie';
 import type { KnowledgeNode, KnowledgeEdge, Conversation, DomainGraph, NodeType, Board } from '@/types';
 import { nanoid } from 'nanoid';
@@ -8,6 +9,7 @@ class StudyboardDB extends Dexie {
   edges!: EntityTable<KnowledgeEdge, 'id'>;
   conversations!: EntityTable<Conversation, 'id'>;
   domains!: EntityTable<DomainGraph, 'id'>;
+  recommendations!: EntityTable<{ id: string; nodeId: string; boardId: string; results: any[]; createdAt: string }, 'id'>;
 
   constructor() {
     super('StudyboardDB');
@@ -17,6 +19,14 @@ class StudyboardDB extends Dexie {
       edges: 'id, source, target, type, boardId, [source+target]',
       conversations: 'id, nodeId, mode, createdAt',
       domains: 'id, name',
+    });
+    this.version(3).stores({
+      boards: 'id, name',
+      nodes: 'id, type, level, status, parentId, boardId, metadata.createdAt, metadata.domainId',
+      edges: 'id, source, target, type, boardId, [source+target]',
+      conversations: 'id, nodeId, boardId, mode, createdAt',
+      domains: 'id, name',
+      recommendations: 'id, nodeId, boardId, createdAt',
     });
   }
 }
@@ -151,4 +161,34 @@ export async function getNodesByBoard(boardId: string): Promise<KnowledgeNode[]>
 
 export async function getEdgesByBoard(boardId: string): Promise<KnowledgeEdge[]> {
   return db.edges.where('boardId').equals(boardId).toArray();
+}
+
+// 按画板查询对话
+export async function getConversationsByBoard(boardId: string): Promise<Conversation[]> {
+  return db.conversations.where('boardId').equals(boardId).reverse().sortBy('createdAt');
+}
+
+// 推荐缓存 CRUD
+export async function getCachedRecommendations(nodeId: string): Promise<any[] | undefined> {
+  const record = await db.recommendations.where('nodeId').equals(nodeId).first();
+  return record?.results;
+}
+
+export async function saveRecommendations(nodeId: string, boardId: string, results: any[]): Promise<void> {
+  // 先删除旧缓存
+  const existing = await db.recommendations.where('nodeId').equals(nodeId).toArray();
+  await db.recommendations.bulkDelete(existing.map(r => r.id));
+  // 保存新缓存
+  await db.recommendations.add({
+    id: nanoid(),
+    nodeId,
+    boardId,
+    results,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+export async function clearRecommendations(nodeId: string): Promise<void> {
+  const existing = await db.recommendations.where('nodeId').equals(nodeId).toArray();
+  await db.recommendations.bulkDelete(existing.map(r => r.id));
 }

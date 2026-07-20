@@ -50,6 +50,18 @@ body {
   to { transform: scale(1); opacity: 1; }
 }
 
+/* AI 侧栏滑入 */
+@keyframes slideInRight {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* 侧栏消息浮现 */
+@keyframes msgIn {
+  from { transform: translateY(6px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
 /* React Flow 画布全屏 */
 .react-flow__renderer,
 .react-flow__zoompane,
