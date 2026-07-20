@@ -41,6 +41,7 @@ function CanvasInner() {
   const isDraggingRef = useRef(false);
   const draggingNodeIdRef = useRef<string | null>(null);
   const hoverClearTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [previewTargetId, setPreviewTargetId] = useState<string | null>(null); // 连线预览目标
 
   // 力导向模拟（拖拽时邻居被拉动，但跳过被拖拽节点）
   const onSimTick = useCallback((newPositions: Map<string, { x: number; y: number }>) => {
@@ -89,8 +90,8 @@ function CanvasInner() {
 
   // 转换边
   const edges: Edge[] = useMemo(
-    () =>
-      storeEdges.map((e: KnowledgeEdge) => {
+    () => {
+      const result: Edge[] = storeEdges.map((e: KnowledgeEdge) => {
         const isHoverDimmed = highlightedIds
           ? !highlightedIds.has(e.source) || !highlightedIds.has(e.target)
           : false;
@@ -105,8 +106,21 @@ function CanvasInner() {
             isSelected: e.id === selectedEdgeId,
           } as unknown as Record<string, unknown>,
         };
-      }),
-    [storeEdges, highlightedIds, selectedEdgeId],
+      });
+      // T-440: 连线预览（流动虚线）
+      if (previewTargetId && draggingNodeIdRef.current) {
+        result.push({
+          id: 'preview-edge',
+          source: draggingNodeIdRef.current,
+          target: previewTargetId,
+          type: 'knowledge',
+          style: { stroke: 'var(--accent)', strokeWidth: 2, strokeDasharray: '6 4', opacity: 0.8 },
+          data: { isPreview: true } as unknown as Record<string, unknown>,
+        } as Edge);
+      }
+      return result;
+    },
+    [storeEdges, highlightedIds, selectedEdgeId, previewTargetId],
   );
 
   // 节点拖拽结束：保存位置 + 近距离连线
@@ -119,12 +133,26 @@ function CanvasInner() {
 
   const onNodeDrag = useCallback((_: any, node: Node) => {
     dragMove(node.id, node.position.x, node.position.y);
-  }, [dragMove]);
+    // 连线预览：检测近距离节点
+    const PROXIMITY = 80;
+    let closest: string | null = null;
+    for (const other of storeNodes) {
+      if (other.id === node.id) continue;
+      const dx = node.position.x - other.position.x;
+      const dy = node.position.y - other.position.y;
+      if (Math.sqrt(dx * dx + dy * dy) < PROXIMITY) {
+        const exists = storeEdges.some(e => (e.source === node.id && e.target === other.id) || (e.source === other.id && e.target === node.id));
+        if (!exists) { closest = other.id; break; }
+      }
+    }
+    setPreviewTargetId(closest);
+  }, [dragMove, storeNodes, storeEdges]);
 
   const onNodeDragStop = useCallback(
     (_: any, node: Node) => {
       isDraggingRef.current = false;
       draggingNodeIdRef.current = null;
+      setPreviewTargetId(null);
       dragEnd(node.id);
       updateNodePosition(node.id, node.position);
 
