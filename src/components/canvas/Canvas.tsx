@@ -17,7 +17,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { nanoid } from 'nanoid';
-import { Lightbulb } from 'lucide-react';
+import { Logo } from '@/components/Logo';
 
 import { useGraphStore } from '@/stores/graphStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -249,6 +249,10 @@ function CanvasInner() {
       if (e.key !== 'Delete' && e.key !== 'Backspace') return;
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      // 全屏详情弹窗打开时不处理（白板/笔记等内部操作不应触发画布删除）
+      if (useUIStore.getState().fullScreenNodeId) return;
+      // Excalidraw 白板内部不处理
+      if (target.closest('.excalidraw')) return;
 
       // 优先：删除 Shift 多选的节点
       if (multiSelectedIds.size > 0) {
@@ -316,7 +320,7 @@ function CanvasInner() {
 
       {storeNodes.length === 0 && (
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <Lightbulb size={48} className="text-gray-600 mb-4" />
+          <Logo size={64} className="mb-4 opacity-60" />
           <p className="text-gray-500 text-lg">开始你的知识探索之旅</p>
           <p className="text-gray-600 text-sm mt-2">在右侧对话面板提问，开始你的知识探索</p>
         </div>

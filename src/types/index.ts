@@ -25,6 +25,7 @@ export interface KnowledgeNode {
   fileData?: string;                           // 文件数据（base64/dataURL）
   notes?: NoteEntry[];                         // 用户笔记
   whiteboard?: string;                         // Excalidraw 白板数据（JSON）
+  whiteboardThumbnail?: string;                // 白板缩略图（data URL）
   metadata: NodeMetadata;
 }
 

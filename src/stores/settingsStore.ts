@@ -19,6 +19,8 @@ export interface MemosSettings {
   customStyle: string;
   /** 操作名 → 快捷键 映射 */
   shortcuts: Record<string, string>;
+  /** AI API Key（阿里千问 Qwen） */
+  apiKey: string;
 }
 
 const STORAGE_KEY = 'memos-settings';
@@ -28,6 +30,7 @@ const DEFAULT_SETTINGS: MemosSettings = {
   responseStyle: 'balanced', // 默认适中
   customStyle: '',
   shortcuts: { ...DEFAULT_SHORTCUTS },
+  apiKey: '',
 };
 
 function loadSettings(): MemosSettings {
@@ -55,6 +58,7 @@ function persist(next: MemosSettings) {
       responseStyle: next.responseStyle,
       customStyle: next.customStyle,
       shortcuts: next.shortcuts,
+      apiKey: next.apiKey,
     }));
   } catch {
     /* ignore */
@@ -62,15 +66,27 @@ function persist(next: MemosSettings) {
 }
 
 interface SettingsState extends MemosSettings {
+  /** 是否已从 localStorage 水合（防止 SSR hydration mismatch） */
+  _hydrated: boolean;
   setAutoRecommend: (value: boolean) => void;
   setResponseStyle: (value: ResponseStyle) => void;
   setCustomStyle: (value: string) => void;
   setShortcut: (action: string, key: string) => void;
+  setApiKey: (key: string) => void;
   resetSettings: () => void;
+  /** 客户端挂载后调用，从 localStorage 加载用户设置 */
+  hydrate: () => void;
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
-  ...loadSettings(),
+  // 始终用默认值初始化，避免 SSR/CSR 不一致
+  ...DEFAULT_SETTINGS,
+  _hydrated: false,
+
+  hydrate: () => {
+    const saved = loadSettings();
+    set({ ...saved, _hydrated: true });
+  },
 
   setAutoRecommend: (value) =>
     set((state) => {
@@ -99,6 +115,13 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       const next = { ...state, shortcuts };
       persist(next);
       return { shortcuts };
+    }),
+
+  setApiKey: (key) =>
+    set((state) => {
+      const next = { ...state, apiKey: key };
+      persist(next);
+      return { apiKey: key };
     }),
 
   resetSettings: () =>

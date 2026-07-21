@@ -4,11 +4,14 @@ import { graphParseSchema } from '@/schemas';
 
 export async function POST(req: Request) {
   try {
-    const { conversation, existingNodes } = await req.json();
+    const { conversation, existingNodes, apiKey } = await req.json();
 
     if (!conversation || !Array.isArray(conversation) || conversation.length === 0) {
       return Response.json({ error: '对话内容不能为空' }, { status: 400 });
     }
+
+    const model = getModel(apiKey);
+    if (!model) return Response.json({ error: '请先在设置中配置 API Key' }, { status: 400 });
 
     const conversationText = conversation
       .map((m: { role: string; content: string }) => `${m.role === 'user' ? '用户' : 'AI'}: ${m.content}`)
@@ -19,7 +22,7 @@ export async function POST(req: Request) {
       : '（暂无已有节点）';
 
     const result = await generateObject({
-      model: getModel(),
+      model,
       schema: graphParseSchema,
       prompt: `分析以下对话，提取其中的知识点结构。
 

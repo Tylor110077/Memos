@@ -39,7 +39,7 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
   const selectedNode = nodes.find(n => n.id === selectedNodeId);
   const { pendingMessage, setPendingMessage, resetSignal, pendingConversation, setPendingConversation } = useChatStore();
   const { currentBoardId, boards } = useBoardStore();
-  const { responseStyle, setResponseStyle, customStyle } = useSettingsStore();
+  const { responseStyle, setResponseStyle, customStyle, apiKey } = useSettingsStore();
   const [styleDropdownOpen, setStyleDropdownOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectionPopup, setSelectionPopup] = useState<{ text: string; x: number; y: number } | null>(null);
@@ -51,6 +51,7 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
       mode,
       style: responseStyle,
       customStyleText: responseStyle === 'custom' ? customStyle : undefined,
+      apiKey: apiKey || undefined,
       context: {
         currentNodeTitle: selectedNode?.title || currentNodeTitle,
         selectedNode: selectedNode ? { title: selectedNode.title, content: selectedNode.content } : undefined,
@@ -146,6 +147,27 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
     setSelectionPopup(null);
   };
 
+  // 续写：将选中文字追加到当前节点最后一条笔记末尾
+  const handleAppendSelectionToNote = () => {
+    if (!selectionPopup || !selectedNodeId) return;
+    const node = nodes.find(n => n.id === selectedNodeId);
+    if (!node) return;
+    const notes = node.notes || [];
+    if (notes.length === 0) {
+      // 无笔记时创建新笔记
+      addNoteToNode(selectedNodeId, selectionPopup.text, 'manual');
+    } else {
+      // 追加到最后一条笔记末尾
+      const lastNote = notes[notes.length - 1];
+      const updatedNotes = notes.map(n =>
+        n.id === lastNote.id ? { ...n, content: n.content + '\n' + selectionPopup.text } : n
+      );
+      useGraphStore.getState().updateNode(selectedNodeId, { notes: updatedNotes });
+    }
+    window.getSelection()?.removeAllRanges();
+    setSelectionPopup(null);
+  };
+
   return (
     <div className="h-full flex flex-col bg-[var(--bg-secondary)]">
       {/* 上下文提示条 */}
@@ -195,20 +217,22 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
         </div>
       )}
 
-      {/* 回答风格选择器 + 圈选开关 */}
+      {/* 回答风格选择器 + 圈选开关（圈选仅在选中节点时显示） */}
       <div className="relative px-4 pt-2 flex justify-end items-center gap-2">
-        <button
-          onClick={() => { setSelectionMode(v => !v); setSelectionPopup(null); }}
-          className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border transition-colors ${
-            selectionMode
-              ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
-              : 'border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]'
-          }`}
-          title="圈选文字加入笔记"
-        >
-          <Highlighter size={12} />
-          圈选
-        </button>
+        {selectedNode && (
+          <button
+            onClick={() => { setSelectionMode(v => !v); setSelectionPopup(null); }}
+            className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border transition-colors ${
+              selectionMode
+                ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
+                : 'border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]'
+            }`}
+            title="圈选文字加入笔记"
+          >
+            <Highlighter size={12} />
+            圈选
+          </button>
+        )}
         <button
           onClick={() => setStyleDropdownOpen(open => !open)}
           className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors"
@@ -239,7 +263,7 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
       </div>
 
       {/* Messages */}
-      <div ref={messageListRef} onMouseUp={handleMouseUp} className="flex-1 overflow-hidden">
+      <div ref={messageListRef} onMouseUp={handleMouseUp} className="flex-1 overflow-hidden flex flex-col">
         <MessageList
           messages={messages}
           selectedMessages={selectedMessages}
@@ -272,6 +296,14 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
               title={!selectedNodeId ? '先选中一个节点' : '加入笔记'}
             >
               加入笔记
+            </button>
+            <button
+              onClick={handleAppendSelectionToNote}
+              disabled={!selectedNodeId}
+              className="px-2 py-1 text-[11px] rounded-md border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title={!selectedNodeId ? '先选中一个节点' : '续写到笔记末尾'}
+            >
+              续写 ⊕
             </button>
             <button
               onClick={() => { window.getSelection()?.removeAllRanges(); setSelectionPopup(null); }}

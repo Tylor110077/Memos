@@ -83,11 +83,11 @@ export default function MessageBubble({ message, selected = false, onSelectChang
           )}
         </div>
         {/* 操作区：悬停浮现，圆润融入背景 */}
-        <div className={`flex items-center gap-2.5 mt-1.5 px-1 transition-opacity duration-200 ${generated ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} ${isUser ? 'flex-row-reverse' : ''}`}>
+        <div className={`flex items-center gap-2 mt-1.5 px-1 transition-opacity duration-200 ${generated ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} ${isUser ? 'flex-row-reverse' : ''}`}>
           <button
             onClick={handleGenerate}
             disabled={isGenerating || generated}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] transition-all ${
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] transition-all ${
               generated
                 ? 'text-green-400 bg-green-400/10'
                 : 'text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-soft)]'
@@ -105,7 +105,7 @@ export default function MessageBubble({ message, selected = false, onSelectChang
               setNoteAdded(true);
             }}
             disabled={!selectedNodeId || noteAdded}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] transition-all ${
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] transition-all ${
               noteAdded
                 ? 'text-green-400 bg-green-400/10'
                 : !selectedNodeId
@@ -117,12 +117,12 @@ export default function MessageBubble({ message, selected = false, onSelectChang
             {noteAdded ? <Check size={12} /> : <StickyNote size={12} />}
             {noteAdded ? '已加入' : '加入笔记'}
           </button>
-          <label className="flex items-center gap-1 cursor-pointer select-none">
+          <label className="flex items-center gap-1 cursor-pointer select-none px-1 py-1">
             <input
               type="checkbox"
               checked={selected}
               onChange={(e) => onSelectChange?.(e.target.checked)}
-              className="w-3 h-3 rounded-full accent-[var(--accent)] cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
+              className="w-3.5 h-3.5 rounded-full accent-[var(--accent)] cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
             />
             <span className="text-[10px] text-[var(--text-muted)] opacity-60 group-hover:opacity-100 transition-opacity">选择</span>
           </label>

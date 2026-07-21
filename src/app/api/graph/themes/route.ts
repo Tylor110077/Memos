@@ -12,8 +12,11 @@ const themeSchema = z.object({
 
 export async function POST(req: Request) {
   try {
-    const { nodes, scope } = await req.json();
+    const { nodes, scope, apiKey } = await req.json();
     const isSelected = scope === 'selected';
+
+    const model = getModel(apiKey);
+    if (!model) return Response.json({ error: '请先在设置中配置 API Key' }, { status: 400 });
 
     // 'selected' 模式：用户已明确选中要分组的节点，全部参与，≥2 即可
     // 'all' 模式：只分析 concept 类型，≥3 才归纳
@@ -31,7 +34,7 @@ export async function POST(req: Request) {
       .join('\n');
 
     const result = await generateObject({
-      model: getModel(),
+      model,
       schema: themeSchema,
       prompt: `分析以下知识点列表，识别其中可以归纳为主题分组的节点。
 

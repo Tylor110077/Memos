@@ -12,10 +12,15 @@ const STYLE_INSTRUCTIONS: Record<Exclude<ResponseStyle, 'custom'>, string> = {
 
 export async function POST(req: Request) {
   try {
-    const { messages, mode, style, customStyleText, context } = await req.json();
+    const { messages, mode, style, customStyleText, context, apiKey } = await req.json();
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return Response.json({ error: '消息不能为空' }, { status: 400 });
+    }
+
+    const model = getModel(apiKey);
+    if (!model) {
+      return Response.json({ error: '请先在设置中配置 API Key' }, { status: 400 });
     }
 
     let systemPrompt = getSystemPrompt(mode as ChatMode, context);
@@ -37,7 +42,7 @@ export async function POST(req: Request) {
     }
 
     const result = streamText({
-      model: getModel(),
+      model,
       system: systemPrompt,
       messages,
     });

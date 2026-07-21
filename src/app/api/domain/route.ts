@@ -4,14 +4,17 @@ import { domainGraphSchema } from '@/schemas';
 
 export async function POST(req: Request) {
   try {
-    const { domain, depth = 3 } = await req.json();
+    const { domain, depth = 3, apiKey } = await req.json();
 
     if (!domain || typeof domain !== 'string') {
       return Response.json({ error: '领域名称不能为空' }, { status: 400 });
     }
 
+    const model = getModel(apiKey);
+    if (!model) return Response.json({ error: '请先在设置中配置 API Key' }, { status: 400 });
+
     const result = await generateObject({
-      model: getModel(),
+      model,
       schema: domainGraphSchema,
       prompt: `为"${domain}"领域生成一个多层级知识图谱结构。
 

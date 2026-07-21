@@ -4,11 +4,14 @@ import { z } from 'zod';
 
 export async function POST(req: Request) {
   try {
-    const { content, title } = await req.json();
+    const { content, title, apiKey } = await req.json();
     if (!content) return Response.json({ error: '内容不能为空' }, { status: 400 });
 
+    const model = getModel(apiKey);
+    if (!model) return Response.json({ error: '请先在设置中配置 API Key' }, { status: 400 });
+
     const result = await generateObject({
-      model: getModel(),
+      model,
       schema: z.object({ summary: z.string() }),
       prompt: `请为以下知识内容生成一段简洁的中文摘要（2-3句话）：
 

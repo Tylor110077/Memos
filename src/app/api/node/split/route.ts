@@ -4,11 +4,14 @@ import { nodeSplitSchema } from '@/schemas';
 
 export async function POST(req: Request) {
   try {
-    const { node, instruction, connectedEdges } = await req.json();
+    const { node, instruction, connectedEdges, apiKey } = await req.json();
 
     if (!node || !instruction) {
       return Response.json({ error: '节点和指令不能为空' }, { status: 400 });
     }
+
+    const model = getModel(apiKey);
+    if (!model) return Response.json({ error: '请先在设置中配置 API Key' }, { status: 400 });
 
     const edgesText = connectedEdges?.length > 0
       ? connectedEdges.map((e: { id: string; source: string; target: string; relation: string }) =>
@@ -17,7 +20,7 @@ export async function POST(req: Request) {
       : '（无外部连接）';
 
     const result = await generateObject({
-      model: getModel(),
+      model,
       schema: nodeSplitSchema,
       prompt: `用户想拆分知识节点"${node.title}"。
 当前内容：${node.content}

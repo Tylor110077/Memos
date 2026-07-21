@@ -5,9 +5,11 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useGraphStore } from '@/stores/graphStore';
+// Excalidraw 0.18 需要显式导入 index.css：用 JS 静态导入（走 development/production 条件）
+// 不能在 globals.css 中 @import（Tailwind v4 用 style 条件解析，会失败）
+import '@excalidraw/excalidraw/index.css';
 
 // Excalidraw 依赖浏览器 API，必须动态导入（ssr: false）
-// 0.18+ 版本样式会自动注入，无需手动引入 CSS
 const Excalidraw = dynamic(
   async () => {
     const mod = await import('@excalidraw/excalidraw');
@@ -66,8 +68,26 @@ export function Whiteboard({ nodeId }: WhiteboardProps) {
   const handleChange = useCallback(
     (elements: readonly any[]) => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
+      debounceRef.current = setTimeout(async () => {
         updateNode(nodeId, { whiteboard: JSON.stringify(elements) });
+        // 生成缩略图
+        try {
+          const { exportToBlob } = await import('@excalidraw/excalidraw');
+          const blob = await exportToBlob({
+            elements: elements as any[],
+            mimeType: 'image/png',
+            quality: 0.6,
+            getDimensions: () => ({ width: 400, height: 300, scale: 1 }),
+          });
+          if (blob) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const dataUrl = reader.result as string;
+              updateNode(nodeId, { whiteboardThumbnail: dataUrl });
+            };
+            reader.readAsDataURL(blob);
+          }
+        } catch { /* 缩略图生成失败不影响主流程 */ }
       }, 1000);
     },
     [nodeId, updateNode],

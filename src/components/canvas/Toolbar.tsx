@@ -152,7 +152,7 @@ export function Toolbar({ selectedNodeIds }: ToolbarProps) {
   };
 
   const buttonClass =
-    'p-2 rounded-md hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 disabled:pointer-events-none';
+    'p-2.5 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 disabled:pointer-events-none min-w-[36px] min-h-[36px] flex items-center justify-center';
 
   return (
     <>

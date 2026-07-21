@@ -87,8 +87,8 @@ export function useForceSimulation(
       .force('center', forceCenter(0, 0).strength(0.08))
       .force('collide', forceCollide(25))
       .force('contain', forceContain(900, 0.35)) // 边界约束：超出 900 半径拉回，防止无限扩散
-      .alphaDecay(0.05) // 快速收敛，约2秒后停止
-      .velocityDecay(0.55) // 阻尼
+      .alphaDecay(0.025) // 较慢衰减，让回弹振荡更充分持久
+      .velocityDecay(0.4) // 较低阻尼，保留弹性振荡感
       .on('tick', () => {
         const positions = new Map<string, { x: number; y: number }>();
         for (const node of nodesRef.current) {
@@ -120,16 +120,17 @@ export function useForceSimulation(
     }
   }, []);
 
-  // 拖拽结束时释放节点
+  // 拖拽结束时释放节点，并重新加热模拟，让被拉远的节点充分回弹
   const dragEnd = useCallback((nodeId: string) => {
     const sim = simRef.current;
     if (!sim) return;
-    sim.alphaTarget(0);
     const node = nodesRef.current.find((n) => n.id === nodeId);
     if (node) {
       node.fx = null;
       node.fy = null;
     }
+    // 重新加热到较高能量，使弹簧力有足够能量回弹；随后自然衰减至稳定
+    sim.alphaTarget(0).alpha(0.6).restart();
   }, []);
 
   // 拖拽过程中更新固定位置

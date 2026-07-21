@@ -6,9 +6,9 @@ import { useUIStore } from '@/stores/uiStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useGraphStore } from '@/stores/graphStore';
 import { useChatStore } from '@/stores/chatStore';
-import ReactMarkdown from 'react-markdown';
-import { X, Edit2, Trash2, Save, Split, Loader2, MessageSquare, Lightbulb, BookOpen, Info, RefreshCw, Sparkles, StickyNote } from 'lucide-react';
+import { X, Trash2, Split, Loader2, MessageSquare, Lightbulb, BookOpen, Info, RefreshCw, Sparkles, StickyNote, PenTool } from 'lucide-react';
 import { getCachedRecommendations, saveRecommendations, clearRecommendations } from '@/lib/db';
+import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import type { NodeType, KnowledgeNode, KnowledgeEdge, NoteEntry } from '@/types';
 
 interface RelatedRecommendation {
@@ -47,7 +47,7 @@ const noteKindColors: Record<NoteEntry['kind'], string> = {
 
 export function NodeDetail() {
   const { nodeDetailOpen, nodeDetailId, closeNodeDetail } = useUIStore();
-  const { autoRecommend } = useSettingsStore();
+  const { autoRecommend, apiKey } = useSettingsStore();
   const { nodes, edges, updateNode, removeNode, applyGraphChanges } = useGraphStore();
   const { setPendingMessage, setChatPanelOpen } = useChatStore();
   const [isEditing, setIsEditing] = useState(false);
@@ -74,6 +74,7 @@ export function NodeDetail() {
           currentNode: { title: targetNode.title, content: targetNode.content, notes: (targetNode.notes || []).map(n => n.content) },
           graph: { nodes: nodes.map(n => ({ title: n.title, type: n.type, level: n.level })), edges: [] },
           type: 'related',
+          apiKey: apiKey || undefined,
         }),
       });
       if (!res.ok) return [];
@@ -128,10 +129,16 @@ export function NodeDetail() {
       setIsLoadingRecommendations(false);
       return;
     }
-    // 关闭自动推荐时，不自动加载，等用户点击"生成相关推荐"
+    // 关闭自动推荐时：仍然先查缓存，有缓存直接显示，只是不自动发 API 请求
     if (!autoRecommend) {
       setRelatedRecommendations([]);
       setIsLoadingRecommendations(false);
+      // 异步查缓存，命中则直接展示
+      getCachedRecommendations(node.id).then(cached => {
+        if (cached && cached.length > 0) {
+          setRelatedRecommendations(cached as RelatedRecommendation[]);
+        }
+      }).catch(() => {});
       return;
     }
     const cancelledRef = { current: false };
@@ -180,28 +187,6 @@ export function NodeDetail() {
       </div>
     );
   }
-
-  const handleStartEdit = () => {
-    setEditTitle(node.title);
-    setEditContent(node.content);
-    setIsEditing(true);
-  };
-
-  const handleSave = () => {
-    updateNode(node.id, {
-      title: editTitle,
-      content: editContent,
-      metadata: { ...node.metadata, updatedAt: new Date().toISOString() },
-    });
-    setIsEditing(false);
-  };
-
-  const handleDelete = () => {
-    if (window.confirm('确定要删除这个节点吗？')) {
-      removeNode(node.id);
-      closeNodeDetail();
-    }
-  };
 
   const handleSplit = async () => {
     if (!splitInstruction.trim() || !node) return;
@@ -294,26 +279,33 @@ export function NodeDetail() {
       </div>
 
       {/* 类型标签 + 创建时间 */}
-      <div className="flex items-center gap-2 px-4 py-2">
+      <div className="flex items-center gap-2 px-4 pt-3 pb-1">
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${typeColors[node.type]}`}>
           {typeLabels[node.type]}
         </span>
-        <span className="text-xs text-[var(--text-secondary)]">
+        <span className="text-xs text-[var(--text-muted)]">
           {new Date(node.metadata.createdAt).toLocaleString('zh-CN')}
         </span>
       </div>
 
       {/* 内容区 */}
-      <div className="flex-1 overflow-y-auto px-4 py-2">
+      <div className="flex-1 overflow-y-auto px-4 py-3">
         {isEditing ? (
           <textarea
             value={editContent}
             onChange={(e) => setEditContent(e.target.value)}
-            className="w-full h-full min-h-[200px] border border-[var(--border-strong)] rounded-md p-3 text-sm resize-none bg-[var(--bg-tertiary)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+            onBlur={() => { updateNode(node.id, { content: editContent }); setIsEditing(false); }}
+            onKeyDown={(e) => { if (e.key === 'Escape') { setIsEditing(false); } }}
+            autoFocus
+            className="w-full h-full min-h-[200px] border border-[var(--border-strong)] rounded-lg p-3 text-sm resize-none bg-[var(--bg-tertiary)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
           />
         ) : (
-          <div className="prose prose-sm max-w-none text-[var(--text-primary)] prose-invert">
-            <ReactMarkdown>{node.content}</ReactMarkdown>
+          <div
+            onClick={() => { setEditContent(node.content); setIsEditing(true); }}
+            className="cursor-text rounded-lg p-1 -m-1 hover:bg-[var(--bg-hover)]/30 transition-colors min-h-[80px]"
+            title="点击编辑内容"
+          >
+            <MarkdownRenderer content={node.content || '*点击编辑…*'} className="text-sm" />
           </div>
         )}
         {node.metadata.conversationId && (
@@ -324,7 +316,7 @@ export function NodeDetail() {
         )}
 
         {/* 笔记区 */}
-        <div className="mt-4 pt-3 border-t border-[var(--border)]">
+        <div className="mt-5 pt-4 border-t border-[var(--border)]/50">
           <div className="flex items-center gap-1.5 mb-2">
             <StickyNote size={13} className="text-[var(--accent)]" />
             <span className="text-xs font-medium text-[var(--text-primary)]">笔记</span>
@@ -341,7 +333,9 @@ export function NodeDetail() {
                       {new Date(note.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
-                  <p className="text-xs text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">{note.content}</p>
+                  <div className="text-xs text-[var(--text-secondary)]">
+                    <MarkdownRenderer content={note.content} className="text-xs" />
+                  </div>
                 </div>
               ))}
             </div>
@@ -349,6 +343,23 @@ export function NodeDetail() {
             <p className="text-[11px] text-[var(--text-muted)]">暂无笔记</p>
           )}
         </div>
+
+        {/* 白板缩略图 */}
+        {node.whiteboardThumbnail && (
+          <div className="mt-5 pt-4 border-t border-[var(--border)]/50">
+            <div className="flex items-center gap-1.5 mb-2">
+              <PenTool size={13} className="text-[var(--accent)]" />
+              <span className="text-xs font-medium text-[var(--text-primary)]">白板</span>
+            </div>
+            <div className="rounded-lg border border-[var(--border)] overflow-hidden bg-white">
+              <img
+                src={node.whiteboardThumbnail}
+                alt="白板缩略图"
+                className="w-full h-auto max-h-[180px] object-contain"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 分化表单 */}
@@ -388,7 +399,7 @@ export function NodeDetail() {
       )}
 
       {/* 相关推荐 */}
-      <div className="px-4 py-3 border-t border-[var(--border)] bg-[var(--bg-primary)]">
+      <div className="px-4 py-3 border-t border-[var(--border)]/50">
         <div className="flex items-center gap-1.5 mb-2">
           <Lightbulb size={13} className="text-[var(--accent)]" />
           <span className="text-xs font-medium text-[var(--text-primary)]">相关推荐</span>
@@ -463,38 +474,26 @@ export function NodeDetail() {
         )}
       </div>
 
-      {/* 底部操作栏 */}
-      <div className="flex items-center gap-2 px-4 py-3 border-t border-[var(--border)]">
-        {isEditing ? (
-          <button
-            onClick={handleSave}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--accent)] text-white text-sm rounded-md hover:bg-[var(--accent-hover)] transition-colors"
-          >
-            <Save size={14} />
-            保存
-          </button>
-        ) : (
-          <button
-            onClick={handleStartEdit}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--bg-hover)] text-[var(--text-primary)] text-sm rounded-md hover:bg-[var(--bg-hover)]/80 transition-colors"
-          >
-            <Edit2 size={14} />
-            编辑
-          </button>
-        )}
+      {/* 底部操作栏：仅保留破坏性操作，编辑已移入内容区点击触发 */}
+      <div className="flex items-center gap-2 px-4 py-2.5 border-t border-[var(--border)]/50">
         <button
           onClick={() => setShowSplitForm((v) => !v)}
           disabled={isEditing || isSplitting}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/15 text-green-400 text-sm rounded-md hover:bg-green-500/25 disabled:opacity-50 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg text-green-400 hover:bg-green-500/10 disabled:opacity-50 transition-colors"
         >
-          <Split size={14} />
+          <Split size={13} />
           分化
         </button>
         <button
-          onClick={handleDelete}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-red-400 text-sm rounded-md hover:bg-red-500/15 transition-colors"
+          onClick={() => {
+            if (window.confirm(`确定删除节点「${node.title}」吗？\n此操作不可撤销。`)) {
+              removeNode(node.id);
+              closeNodeDetail();
+            }
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
         >
-          <Trash2 size={14} />
+          <Trash2 size={13} />
           删除
         </button>
       </div>

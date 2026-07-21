@@ -4,7 +4,9 @@ import { recommendationSchema } from '@/schemas';
 
 export async function POST(req: Request) {
   try {
-    const { currentNode, graph, type } = await req.json();
+    const { currentNode, graph, type, apiKey } = await req.json();
+    const model = getModel(apiKey);
+    if (!model) return Response.json({ error: '请先在设置中配置 API Key' }, { status: 400 });
 
     if (type === 'related') {
       const existingTitles = graph?.nodes?.map((n: { title: string }) => n.title).join(', ') || '';
@@ -12,7 +14,7 @@ export async function POST(req: Request) {
         ? `\n用户在该知识点上的笔记：${currentNode.notes.join('；')}`
         : '';
       const result = await generateObject({
-        model: getModel(),
+        model,
         schema: recommendationSchema,
         prompt: `用户正在学习“${currentNode?.title || '未知'}”，内容是：${currentNode?.content || ''}${notesText}
 用户已学过的知识：${existingTitles}
@@ -27,7 +29,7 @@ export async function POST(req: Request) {
     if (type === 'breakthrough') {
       const domains = graph?.nodes?.map((n: { title: string }) => n.title).join(', ') || '';
       const result = await generateObject({
-        model: getModel(),
+        model,
         schema: recommendationSchema,
         prompt: `用户的知识图谱主要覆盖：${domains}
 

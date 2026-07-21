@@ -10,6 +10,7 @@ import { useGraphStore } from '@/stores/graphStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useBoardStore } from '@/stores/boardStore';
 import { useChatStore } from '@/stores/chatStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { useShortcuts } from '@/hooks/useShortcuts';
 
 // React Flow 不支持 SSR，需要动态导入
@@ -45,6 +46,11 @@ export default function Home() {
     [],
   );
   useShortcuts(shortcutHandlers);
+
+  // 客户端挂载后从 localStorage 水合设置（避免 SSR hydration mismatch）
+  useEffect(() => {
+    useSettingsStore.getState().hydrate();
+  }, []);
 
   // 初始化画板
   useEffect(() => {

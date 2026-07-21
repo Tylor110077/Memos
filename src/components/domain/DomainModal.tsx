@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useGraphStore } from '@/stores/graphStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { nanoid } from 'nanoid';
 import { X, Globe, Loader2 } from 'lucide-react';
 import type { KnowledgeNode, KnowledgeEdge } from '@/types';
@@ -10,6 +11,7 @@ import type { KnowledgeNode, KnowledgeEdge } from '@/types';
 export function DomainModal() {
   const { domainModalOpen, closeDomainModal } = useUIStore();
   const { applyGraphChanges } = useGraphStore();
+  const { apiKey } = useSettingsStore();
   const [domainName, setDomainName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -22,7 +24,7 @@ export function DomainModal() {
       const res = await fetch('/api/domain', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain: domainName.trim(), depth: 3 }),
+        body: JSON.stringify({ domain: domainName.trim(), depth: 3, apiKey: apiKey || undefined }),
       });
       if (!res.ok) throw new Error('生成失败');
       const data = await res.json();

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Settings, X, Sparkles, RotateCcw, Check, MessageSquareText, Keyboard } from 'lucide-react';
+import { Settings, X, Sparkles, RotateCcw, Check, MessageSquareText, Keyboard, Key, Eye, EyeOff } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { themes, applyTheme, getSavedTheme } from '@/lib/themes';
 import { formatShortcut } from '@/hooks/useShortcuts';
@@ -63,14 +63,19 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 }
 
 export function SettingsModal({ visible, onClose }: SettingsModalProps) {
-  const { autoRecommend, setAutoRecommend, resetSettings, responseStyle, setResponseStyle, shortcuts, setShortcut } = useSettingsStore();
+  const { autoRecommend, setAutoRecommend, resetSettings, responseStyle, setResponseStyle, shortcuts, setShortcut, apiKey, setApiKey } = useSettingsStore();
   const [currentTheme, setCurrentTheme] = useState('abyss');
+  const [apiKeyDraft, setApiKeyDraft] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
   /** 正在捕获快捷键的操作名，null 表示未在捕获 */
   const [capturingAction, setCapturingAction] = useState<string | null>(null);
 
   useEffect(() => {
-    if (visible) setCurrentTheme(getSavedTheme());
-  }, [visible]);
+    if (visible) {
+      setCurrentTheme(getSavedTheme());
+      setApiKeyDraft(apiKey);
+    }
+  }, [visible, apiKey]);
 
   // 捕获快捷键：监听下一次按键组合
   const handleCaptureKey = useCallback(
@@ -143,6 +148,54 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
 
         {/* 内容区 */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-7">
+          {/* AI 配置 */}
+          <section>
+            <h3 className="text-[11px] font-semibold tracking-widest text-[var(--text-muted)] uppercase mb-3">AI 配置</h3>
+            <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg-primary)]">
+              <div className="flex items-start gap-3 mb-3">
+                <div className="w-8 h-8 rounded-lg bg-[var(--accent-soft)] flex items-center justify-center shrink-0 mt-0.5">
+                  <Key size={15} className="text-[var(--accent)]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-[var(--text-primary)]">阿里千问 Qwen API Key</p>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
+                    用于 AI 对话、推荐、摘要等功能。Key 仅存储在本地浏览器中。
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type={showApiKey ? 'text' : 'password'}
+                    value={apiKeyDraft}
+                    onChange={(e) => setApiKeyDraft(e.target.value)}
+                    placeholder="sk-..."
+                    className="w-full px-3 py-2 pr-9 text-sm rounded-lg border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors font-mono"
+                  />
+                  <button
+                    onClick={() => setShowApiKey(v => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                    title={showApiKey ? '隐藏' : '显示'}
+                  >
+                    {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+                <button
+                  onClick={() => setApiKey(apiKeyDraft.trim())}
+                  disabled={apiKeyDraft.trim() === apiKey}
+                  className="px-4 py-2 text-sm font-medium text-white bg-[var(--accent)] hover:bg-[var(--accent-hover)] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                >
+                  保存
+                </button>
+              </div>
+              {apiKey && (
+                <p className="text-[11px] text-green-400 mt-2 flex items-center gap-1">
+                  <Check size={11} /> 已配置
+                </p>
+              )}
+            </div>
+          </section>
+
           {/* 学习行为 */}
           <section>
             <h3 className="text-[11px] font-semibold tracking-widest text-[var(--text-muted)] uppercase mb-3">学习行为</h3>
