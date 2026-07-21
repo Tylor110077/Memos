@@ -2,6 +2,7 @@
 'use client';
 
 import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { FileTypeIcon } from '@/components/shared/FileTypeIcon';
 
 // 各节点类型对应的颜色（从 CSS 变量读取）
 const TYPE_COLORS: Record<string, string> = {
@@ -25,6 +26,8 @@ export function DotNode({ data, selected }: NodeProps) {
   const level: number = node.level ?? 2;
   const title: string = node.title ?? '';
   const nodeType: string = node.type ?? 'concept';
+  const materialType: string | undefined = node.metadata?.materialType;
+  const fileName: string | undefined = node.metadata?.source;
 
   // 大小：level 越低（越重要）越大
   const size = level === 0 ? 14 : level === 1 ? 11 : level === 2 ? 9 : 7;
@@ -52,6 +55,13 @@ export function DotNode({ data, selected }: NodeProps) {
           transform: isHovered ? 'scale(1.4)' : 'scale(1)',
         }}
       />
+
+      {/* 文件类型图标（材料节点且有文件类型时显示） */}
+      {nodeType === 'material' && materialType && (
+        <div className="absolute -top-1 -right-3">
+          <FileTypeIcon type={materialType} fileName={fileName} size={14} />
+        </div>
+      )}
 
       {/* 文字标签（绝对定位，不影响节点尺寸） */}
       <span

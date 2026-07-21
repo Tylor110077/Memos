@@ -8,7 +8,7 @@ export interface Board {
 // ===== 节点类型 =====
 export type NodeType = 'concept' | 'theme' | 'material' | 'understanding' | 'question';
 export type NodeStatus = 'lit' | 'unlit';
-export type MaterialType = 'article' | 'video' | 'pdf';
+export type MaterialType = 'article' | 'video' | 'pdf' | 'docx' | 'xlsx' | 'pptx' | 'markdown';
 
 export interface KnowledgeNode {
   id: string;

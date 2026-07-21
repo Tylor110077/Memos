@@ -10,6 +10,10 @@ import { useBoardStore } from '@/stores/boardStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { detectFileType } from '@/lib/fileUtils';
+import { DocxPreview } from '@/components/file-preview/DocxPreview';
+import { XlsxPreview } from '@/components/file-preview/XlsxPreview';
+import { PptxPreview } from '@/components/file-preview/PptxPreview';
+import { MarkdownEditor } from '@/components/file-preview/MarkdownEditor';
 import { createConversation, updateConversation } from '@/lib/db';
 import type { ChatMessage, ChatMode, ResponseStyle, NoteKind, KnowledgeNode, KnowledgeEdge, NodeType } from '@/types';
 
@@ -469,6 +473,9 @@ export function FullScreenDetail() {
   const isWebMaterial = isMaterial && node.metadata.source?.startsWith('http');
   const isMarkdownFile = isMaterial && node.metadata.source && detectFileType(node.metadata.source) === 'markdown';
   const isPdfFile = isMaterial && (node.fileData || node.metadata.materialType === 'pdf');
+  const isDocxFile = isMaterial && node.fileData && (node.metadata.materialType === 'docx' || node.metadata.source?.endsWith('.docx') || node.metadata.source?.endsWith('.doc'));
+  const isXlsxFile = isMaterial && node.fileData && (node.metadata.materialType === 'xlsx' || node.metadata.source?.endsWith('.xlsx') || node.metadata.source?.endsWith('.xls'));
+  const isPptxFile = isMaterial && node.fileData && (node.metadata.materialType === 'pptx' || node.metadata.source?.endsWith('.pptx') || node.metadata.source?.endsWith('.ppt'));
 
   const currentMode = AI_MODES.find(m => m.value === aiMode) || AI_MODES[0];
   const currentStyle = AI_STYLES.find(s => s.value === responseStyle) || AI_STYLES[0];
@@ -602,14 +609,26 @@ export function FullScreenDetail() {
                   />
                 </div>
               </div>
+            ) : isDocxFile && node.fileData ? (
+              /* Word 文档节点 */
+              <div className="flex-1 overflow-y-auto">
+                <DocxPreview fileData={node.fileData} />
+              </div>
+            ) : isXlsxFile && node.fileData ? (
+              /* Excel 表格节点 */
+              <div className="flex-1 overflow-hidden">
+                <XlsxPreview fileData={node.fileData} />
+              </div>
+            ) : isPptxFile && node.fileData ? (
+              /* PPT 演示文稿节点 */
+              <PptxPreview fileData={node.fileData} />
             ) : isMarkdownFile ? (
-              /* Markdown 文件节点：使用 MarkdownRenderer 渲染 */
-              <div className="flex-1 flex flex-col">
-                <div className="flex-1 overflow-y-auto px-6 py-4">
-                  <div className="max-w-3xl mx-auto">
-                    <MarkdownRenderer content={node.content || '（无内容）'} />
-                  </div>
-                </div>
+              /* Markdown 文件节点：可编辑 + 实时预览 */
+              <div className="flex-1 overflow-hidden">
+                <MarkdownEditor
+                  content={node.content || ''}
+                  onChange={(val) => updateNode(node.id, { content: val })}
+                />
               </div>
             ) : isWebMaterial ? (
               /* 网页材料节点：iframe 嵌入原文 */
