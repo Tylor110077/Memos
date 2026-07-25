@@ -42,6 +42,9 @@ export default function Home() {
       fitView: () => {
         window.dispatchEvent(new CustomEvent('studyboard:fit-view'));
       },
+      toggleChat: () => {
+        window.dispatchEvent(new CustomEvent('studyboard:toggle-chat'));
+      },
     }),
     [],
   );

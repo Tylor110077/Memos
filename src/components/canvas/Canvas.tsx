@@ -114,7 +114,7 @@ function CanvasInner() {
           source: draggingNodeIdRef.current,
           target: previewTargetId,
           type: 'knowledge',
-          style: { stroke: 'var(--accent)', strokeWidth: 2, strokeDasharray: '6 4', opacity: 0.8 },
+          style: { stroke: 'var(--accent)', strokeWidth: 1.5, strokeDasharray: '4 8', opacity: 0.9 },
           data: { isPreview: true } as unknown as Record<string, unknown>,
         } as Edge);
       }

@@ -34,9 +34,14 @@ class StudyboardDB extends Dexie {
 export const db = new StudyboardDB();
 
 // 节点 CRUD
-export async function createNode(node: Omit<KnowledgeNode, 'id'>): Promise<KnowledgeNode> {
-  const newNode = { ...node, id: nanoid() };
-  await db.nodes.add(newNode);
+export async function createNode(node: KnowledgeNode): Promise<KnowledgeNode> {
+  const newNode: KnowledgeNode = { ...node };
+  if (!newNode.id) newNode.id = nanoid();
+  try {
+    await db.nodes.add(newNode);
+  } catch {
+    await db.nodes.put(newNode);
+  }
   return newNode;
 }
 
@@ -73,9 +78,15 @@ export async function getChildNodes(parentId: string): Promise<KnowledgeNode[]> 
 }
 
 // 边 CRUD
-export async function createEdge(edge: Omit<KnowledgeEdge, 'id'>): Promise<KnowledgeEdge> {
-  const newEdge = { ...edge, id: nanoid() };
-  await db.edges.add(newEdge);
+export async function createEdge(edge: KnowledgeEdge): Promise<KnowledgeEdge> {
+  const newEdge: KnowledgeEdge = { ...edge };
+  if (!newEdge.id) newEdge.id = nanoid();
+  try {
+    await db.edges.add(newEdge);
+  } catch {
+    // add 失败（id 已存在）时用 put 覆盖
+    await db.edges.put(newEdge);
+  }
   return newEdge;
 }
 
@@ -160,7 +171,44 @@ export async function getNodesByBoard(boardId: string): Promise<KnowledgeNode[]>
 }
 
 export async function getEdgesByBoard(boardId: string): Promise<KnowledgeEdge[]> {
-  return db.edges.where('boardId').equals(boardId).toArray();
+  try {
+    // 主查询：按 boardId 索引查
+    const edges = await db.edges.where('boardId').equals(boardId).toArray();
+    if (edges.length > 0) return edges;
+
+    // Fallback：如果索引查询为空，加载所有边在内存中过滤
+    // （解决 boardId 索引未正确更新的问题）
+    const allEdges = await db.edges.toArray();
+    const matched = allEdges.filter(e => e.boardId === boardId);
+    if (matched.length > 0) {
+      // 索引可能损坏，重建：重新 put 这些边以修复索引
+      for (const e of matched) {
+        await db.edges.put(e).catch(() => {});
+      }
+      return matched;
+    }
+
+    // 兼容旧数据：boardId 为空的边，通过 source 节点推断
+    const orphans = allEdges.filter(e => !e.boardId || e.boardId === '');
+    if (orphans.length === 0) return [];
+    const nodeIds = [...new Set(orphans.map(e => e.source))];
+    const nodes = await db.nodes.where('id').anyOf(nodeIds).toArray();
+    const nodeBoardMap = new Map(nodes.map(n => [n.id, n.boardId]));
+    const result: KnowledgeEdge[] = [];
+    for (const edge of orphans) {
+      const inferred = nodeBoardMap.get(edge.source);
+      if (inferred === boardId) {
+        edge.boardId = boardId;
+        await db.edges.put(edge).catch(() => {});
+        result.push(edge);
+      }
+    }
+    return result;
+  } catch (err) {
+    console.error('getEdgesByBoard error:', err);
+    // 最终 fallback：返回空数组而非抛异常
+    return [];
+  }
 }
 
 // 按画板查询对话

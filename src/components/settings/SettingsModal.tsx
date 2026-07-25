@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Settings, X, Sparkles, RotateCcw, Check, MessageSquareText, Keyboard, Key, Eye, EyeOff } from 'lucide-react';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { Settings, X, Sparkles, RotateCcw, Check, MessageSquareText, Keyboard, Key, Eye, EyeOff, Palette } from 'lucide-react';
+import { useSettingsStore, DEFAULT_NODE_COLORS } from '@/stores/settingsStore';
 import { themes, applyTheme, getSavedTheme } from '@/lib/themes';
 import { formatShortcut } from '@/hooks/useShortcuts';
 import type { ResponseStyle } from '@/types';
@@ -11,6 +11,7 @@ import type { ResponseStyle } from '@/types';
 const SHORTCUT_ACTIONS: { action: string; label: string; desc: string }[] = [
   { action: 'focusChat', label: '聚焦对话', desc: '快速将光标定位到对话输入框' },
   { action: 'newChat', label: '新建对话', desc: '清空当前对话，开始新一轮' },
+  { action: 'toggleChat', label: '切换对话栏', desc: '展开/关闭右侧对话面板或 AI 侧栏' },
   { action: 'fitView', label: '适配视图', desc: '缩放画布以展示所有节点' },
 ];
 
@@ -63,7 +64,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 }
 
 export function SettingsModal({ visible, onClose }: SettingsModalProps) {
-  const { autoRecommend, setAutoRecommend, resetSettings, responseStyle, setResponseStyle, customStyle, setCustomStyle, shortcuts, setShortcut, apiKey, setApiKey, autoCognitionEval, setAutoCognitionEval } = useSettingsStore();
+  const { autoRecommend, setAutoRecommend, resetSettings, responseStyle, setResponseStyle, customStyle, setCustomStyle, shortcuts, setShortcut, apiKey, setApiKey, autoCognitionEval, setAutoCognitionEval, nodeColors, setNodeColor } = useSettingsStore();
   const [currentTheme, setCurrentTheme] = useState('abyss');
   const [apiKeyDraft, setApiKeyDraft] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
@@ -356,6 +357,32 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
                       </span>
                     )}
                   </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* 节点颜色 */}
+          <section>
+            <h3 className="text-[11px] font-semibold tracking-widest text-[var(--text-muted)] uppercase mb-3">节点颜色</h3>
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] divide-y divide-[var(--border)]">
+              {Object.entries(DEFAULT_NODE_COLORS).map(([type, defaultColor]) => {
+                const labels: Record<string, string> = { concept: '概念', theme: '主题', material: '材料', understanding: '理解', question: '问题' };
+                const currentColor = nodeColors[type] || defaultColor;
+                return (
+                  <div key={type} className="flex items-center gap-3 px-4 py-2.5">
+                    <input
+                      type="color"
+                      value={currentColor}
+                      onChange={(e) => setNodeColor(type, e.target.value)}
+                      className="w-7 h-7 rounded-md border border-[var(--border)] cursor-pointer bg-transparent p-0.5"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-[var(--text-primary)]">{labels[type] || type}</p>
+                      <p className="text-[10px] text-[var(--text-muted)] font-mono">{currentColor}</p>
+                    </div>
+                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: currentColor }} />
+                  </div>
                 );
               })}
             </div>

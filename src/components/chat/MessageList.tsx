@@ -9,9 +9,10 @@ interface MessageListProps {
   messages: Message[];
   selectedMessages?: Set<number>;
   onSelectChange?: (index: number, checked: boolean) => void;
+  onEditMessage?: (id: string, newContent: string) => void;
 }
 
-export default function MessageList({ messages, selectedMessages, onSelectChange }: MessageListProps) {
+export default function MessageList({ messages, selectedMessages, onSelectChange, onEditMessage }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -50,6 +51,7 @@ export default function MessageList({ messages, selectedMessages, onSelectChange
           message={message}
           selected={selectedMessages?.has(index) ?? false}
           onSelectChange={(checked) => onSelectChange?.(index, checked)}
+          onEditMessage={onEditMessage}
         />
       ))}
       <div ref={bottomRef} />

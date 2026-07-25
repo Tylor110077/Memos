@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageSquare, Info, PanelRightClose, PanelRightOpen, Plus, Clock, ArrowLeft } from 'lucide-react';
+import { MessageSquare, Info, PanelRightClose, PanelRightOpen, Plus, Clock, ArrowLeft, Bot } from 'lucide-react';
 import ChatPanel from '@/components/chat/ChatPanel';
 import { NodeDetail } from '@/components/node/NodeDetail';
 import { useGraphStore } from '@/stores/graphStore';
@@ -59,6 +59,13 @@ export function RightPanel() {
       setCollapsed(false);
     }
   }, [chatPanelOpen]);
+
+  // 快捷键切换对话栏
+  useEffect(() => {
+    const handler = () => setCollapsed(v => !v);
+    window.addEventListener('studyboard:toggle-chat', handler);
+    return () => window.removeEventListener('studyboard:toggle-chat', handler);
+  }, []);
 
   // 拖拽期间：全局显示 col-resize 光标并禁用文本选中
   useEffect(() => {
@@ -145,8 +152,8 @@ export function RightPanel() {
           title="展开面板"
           className="fixed right-3 top-1/2 -translate-y-1/2 z-30 w-12 h-12 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] shadow-lg text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] hover:shadow-xl transition-all flex flex-col items-center justify-center gap-0.5"
         >
-          <PanelRightOpen size={18} />
-          <span className="text-[10px] leading-none font-medium">对话</span>
+          <Bot size={18} />
+          <span className="text-[10px] leading-none font-medium">AI</span>
         </button>
       )}
 
@@ -167,8 +174,7 @@ export function RightPanel() {
         />
         {/* 面板内容 */}
         <div
-          className="flex flex-col overflow-hidden flex-shrink-0 border-l border-[var(--border)] bg-[var(--bg-secondary)]"
-          style={{ width: width - 4 }}
+          className="flex flex-col overflow-hidden flex-1 min-w-0 border-l border-[var(--border)] bg-[var(--bg-secondary)]"
           suppressHydrationWarning
         >
           {/* Tab 栏 */}

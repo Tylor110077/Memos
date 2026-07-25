@@ -10,6 +10,7 @@ import { useBoardStore } from '@/stores/boardStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { parseConversationToGraph } from '@/lib/graphUtils';
 import { createConversation, updateConversation } from '@/lib/db';
+import { SelectionPopup } from '@/components/shared/SelectionPopup';
 import MessageList from './MessageList';
 import ChatInput from './ChatInput';
 import type { ResponseStyle } from '@/types';
@@ -147,20 +148,18 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
     setSelectionPopup(null);
   };
 
-  // 续写：将选中文字追加到当前节点最后一条笔记末尾
-  const handleAppendSelectionToNote = () => {
+  // 续写：将选中文字追加到指定笔记末尾
+  const handleAppendSelectionToNote = (noteId?: string) => {
     if (!selectionPopup || !selectedNodeId) return;
     const node = nodes.find(n => n.id === selectedNodeId);
     if (!node) return;
-    const notes = node.notes || [];
-    if (notes.length === 0) {
-      // 无笔记时创建新笔记
+    const noteList = node.notes || [];
+    if (noteList.length === 0) {
       addNoteToNode(selectedNodeId, selectionPopup.text, 'manual');
     } else {
-      // 追加到最后一条笔记末尾
-      const lastNote = notes[notes.length - 1];
-      const updatedNotes = notes.map(n =>
-        n.id === lastNote.id ? { ...n, content: (n.content ? n.content + '\n\n' : '') + selectionPopup.text } : n
+      const targetId = noteId || noteList[noteList.length - 1].id;
+      const updatedNotes = noteList.map(n =>
+        n.id === targetId ? { ...n, content: (n.content ? n.content + '\n\n' : '') + selectionPopup.text } : n
       );
       useGraphStore.getState().updateNode(selectedNodeId, { notes: updatedNotes });
     }
@@ -278,41 +277,50 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
               return next;
             });
           }}
+          onEditMessage={(id, newContent) => {
+            // 找到消息索引，截断后续消息，修改内容后重新发送
+            const idx = messages.findIndex(m => m.id === id);
+            if (idx < 0) return;
+            const truncated = messages.slice(0, idx);
+            setMessages([...truncated, { ...messages[idx], content: newContent }]);
+            // 重新发送编辑后的消息
+            setTimeout(() => append({ role: 'user', content: newContent }), 50);
+          }}
         />
       </div>
 
       {/* 圈选确认浮层 */}
       {selectionPopup && (
-        <div
-          className="fixed z-[999] px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] shadow-xl"
-          style={{ left: Math.min(selectionPopup.x, window.innerWidth - 220), top: selectionPopup.y + 8 }}
-        >
-          <p className="text-[11px] text-[var(--text-secondary)] max-w-[200px] truncate mb-2">“{selectionPopup.text}”</p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleAddSelectionToNote}
-              disabled={!selectedNodeId}
-              className="px-2 py-1 text-[11px] rounded-md bg-[var(--accent-soft)] text-[var(--accent)] hover:bg-[var(--accent-hover)]/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              title={!selectedNodeId ? '先选中一个节点' : '加入笔记'}
-            >
-              加入笔记
-            </button>
-            <button
-              onClick={handleAppendSelectionToNote}
-              disabled={!selectedNodeId}
-              className="px-2 py-1 text-[11px] rounded-md border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              title={!selectedNodeId ? '先选中一个节点' : '续写到笔记末尾'}
-            >
-              续写 ⊕
-            </button>
-            <button
-              onClick={() => { window.getSelection()?.removeAllRanges(); setSelectionPopup(null); }}
-              className="px-2 py-1 text-[11px] rounded-md text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
-            >
-              取消
-            </button>
-          </div>
-        </div>
+        <SelectionPopup
+          text={selectionPopup.text}
+          initialX={selectionPopup.x}
+          initialY={selectionPopup.y}
+          onClose={() => { window.getSelection()?.removeAllRanges(); setSelectionPopup(null); }}
+          onAddToNote={handleAddSelectionToNote}
+          onAppendToNote={handleAppendSelectionToNote}
+          notes={selectedNodeId ? (nodes.find(n => n.id === selectedNodeId)?.notes || []).map(n => ({ id: n.id, content: n.content })) : []}
+          onCreateNode={() => {
+            if (!selectionPopup || !currentBoardId) return;
+            const text = selectionPopup.text.trim();
+            if (!text) return;
+            const now = new Date().toISOString();
+            useGraphStore.getState().addNode({
+              id: `node-${nanoid(8)}`,
+              boardId: currentBoardId,
+              type: 'understanding',
+              title: text.length > 24 ? text.slice(0, 24) + '…' : text,
+              content: text,
+              level: 3,
+              status: 'lit',
+              position: { x: Math.random() * 300 - 150, y: Math.random() * 300 - 150 },
+              metadata: { createdAt: now, updatedAt: now },
+            });
+            window.getSelection()?.removeAllRanges();
+            setSelectionPopup(null);
+          }}
+          noteDisabled={!selectedNodeId}
+          noteDisabledHint="先选中一个节点"
+        />
       )}
 
       {/* Input */}

@@ -76,30 +76,34 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   selectEdge: (id) => set({ selectedEdgeId: id, selectedNodeId: null }),
 
   applyGraphChanges: (changes) => {
+    // 先更新内存状态
     set((state) => {
       let nodes = [...state.nodes];
       const edges = [...state.edges];
 
-      // 添加新节点
       for (const node of changes.newNodes) {
         nodes.push(node);
-        dbOps.createNode(node).catch(console.error);
       }
-
-      // 更新已有节点
       for (const { id, updates } of changes.updatedNodes) {
         nodes = nodes.map((n) => (n.id === id ? { ...n, ...updates } : n));
-        dbOps.updateNode(id, updates).catch(console.error);
       }
-
-      // 添加新边
       for (const edge of changes.newEdges) {
         edges.push(edge);
-        dbOps.createEdge(edge).catch(console.error);
       }
 
       return { nodes, edges };
     });
+
+    // 在 set 外部执行数据库持久化（与 addEdge/addNode 行为一致）
+    for (const node of changes.newNodes) {
+      dbOps.createNode(node).catch(console.error);
+    }
+    for (const { id, updates } of changes.updatedNodes) {
+      dbOps.updateNode(id, updates).catch(console.error);
+    }
+    for (const edge of changes.newEdges) {
+      dbOps.createEdge(edge).catch(console.error);
+    }
   },
 
   updateNodePosition: (id, position) => {

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useGraphStore } from '@/stores/graphStore';
+import { useBoardStore } from '@/stores/boardStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { nanoid } from 'nanoid';
 import { X, Globe, Loader2 } from 'lucide-react';
@@ -11,6 +12,7 @@ import type { KnowledgeNode, KnowledgeEdge } from '@/types';
 export function DomainModal() {
   const { domainModalOpen, closeDomainModal } = useUIStore();
   const { applyGraphChanges } = useGraphStore();
+  const { currentBoardId } = useBoardStore();
   const { apiKey } = useSettingsStore();
   const [domainName, setDomainName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -55,11 +57,12 @@ export function DomainModal() {
 
         return {
           id,
+          boardId: currentBoardId || '',
           type: n.type,
           title: n.title,
           content: n.content,
           level: n.level,
-          status: 'unlit' as const,
+          status: 'lit' as const,
           position: { x, y },
           metadata: {
             domainId: nanoid(),
@@ -76,6 +79,7 @@ export function DomainModal() {
         )
         .map((e: { sourceTitle: string; targetTitle: string; relation: string; type: 'hierarchy' | 'association' }) => ({
           id: nanoid(),
+          boardId: currentBoardId || '',
           source: titleToId.get(e.sourceTitle)!,
           target: titleToId.get(e.targetTitle)!,
           relation: e.relation,

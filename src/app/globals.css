@@ -118,10 +118,14 @@ body {
   box-shadow: none;
 }
 
-/* T-440: 连线预览流动虚线动画 */
+/* T-440: 连线预览 — 细线 + 线段式前进动画 */
 .react-flow__edge[data-id="preview-edge"] path {
-  animation: dashFlow 0.6s linear infinite;
+  animation: dashFlow 0.4s linear infinite;
+  stroke-width: 1.5 !important;
+  stroke: var(--accent) !important;
+  opacity: 0.9;
+  filter: none !important;
 }
 @keyframes dashFlow {
-  to { stroke-dashoffset: -10; }
+  to { stroke-dashoffset: -12; }
 }

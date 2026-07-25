@@ -9,6 +9,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { X, Trash2, Split, Loader2, MessageSquare, Lightbulb, BookOpen, Info, RefreshCw, Sparkles, StickyNote, PenTool } from 'lucide-react';
 import { getCachedRecommendations, saveRecommendations, clearRecommendations } from '@/lib/db';
 import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
+import { CognitionRing } from '@/components/cognition/CognitionRing';
 import type { NodeType, KnowledgeNode, KnowledgeEdge, NoteEntry } from '@/types';
 
 interface RelatedRecommendation {
@@ -278,7 +279,7 @@ export function NodeDetail() {
         </button>
       </div>
 
-      {/* 类型标签 + 创建时间 */}
+      {/* 类型标签 + 创建时间 + 认知环 */}
       <div className="flex items-center gap-2 px-4 pt-3 pb-1">
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${typeColors[node.type]}`}>
           {typeLabels[node.type]}
@@ -286,6 +287,11 @@ export function NodeDetail() {
         <span className="text-xs text-[var(--text-muted)]">
           {new Date(node.metadata.createdAt).toLocaleString('zh-CN')}
         </span>
+        {node.cognitionLevel !== undefined && node.cognitionLevel > 0 && (
+          <div className="ml-auto">
+            <CognitionRing level={node.cognitionLevel} reason={node.cognitionReason} size={28} />
+          </div>
+        )}
       </div>
 
       {/* 内容区 */}

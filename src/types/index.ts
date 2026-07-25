@@ -29,6 +29,7 @@ export interface KnowledgeNode {
   cognitionLevel?: number;                     // 1-5 认知档位
   cognitionReason?: string;                    // AI 评审理由
   cognitionHistory?: { level: number; evaluatedAt: string; conversationLength: number }[];
+  aiConversations?: { id: string; messages: { role: string; content: string; timestamp: string }[]; mode: string; createdAt: string }[];
   metadata: NodeMetadata;
 }
 

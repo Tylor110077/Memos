@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, FileText, Loader2, Sparkles, MessageSquare, Send, ChevronDown, Split, Trash2, StickyNote, PenLine, Highlighter } from 'lucide-react';
+import { X, FileText, Loader2, Sparkles, MessageSquare, Send, ChevronDown, Split, Trash2, StickyNote, PenLine, Highlighter, Plus, Clock } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import dynamic from 'next/dynamic';
 import { useUIStore } from '@/stores/uiStore';
@@ -9,13 +9,14 @@ import { useGraphStore } from '@/stores/graphStore';
 import { useBoardStore } from '@/stores/boardStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
+import { SelectionPopup } from '@/components/shared/SelectionPopup';
+import { CognitionRing } from '@/components/cognition/CognitionRing';
 import { detectFileType } from '@/lib/fileUtils';
 import { DocxPreview } from '@/components/file-preview/DocxPreview';
 import { XlsxPreview } from '@/components/file-preview/XlsxPreview';
 import { PptxPreview } from '@/components/file-preview/PptxPreview';
 import { MarkdownEditor } from '@/components/file-preview/MarkdownEditor';
 import { PipWindow } from '@/components/pip/PipWindow';
-import { CognitionRing } from '@/components/cognition/CognitionRing';
 import { createConversation, updateConversation } from '@/lib/db';
 import type { ChatMessage, ChatMode, ResponseStyle, NoteKind, KnowledgeNode, KnowledgeEdge, NodeType } from '@/types';
 
@@ -116,6 +117,7 @@ export function FullScreenDetail() {
   // ===== AI 侧栏圈选加入笔记 =====
   const [aiSelectionMode, setAiSelectionMode] = useState(false);
   const [aiSelectionPopup, setAiSelectionPopup] = useState<{ text: string; x: number; y: number } | null>(null);
+  const [showAiHistory, setShowAiHistory] = useState(false);
 
   // ===== T-540: 侧栏拖拽宽度 =====
   const [sidebarWidth, setSidebarWidth] = useState(300);
@@ -126,20 +128,33 @@ export function FullScreenDetail() {
   const [showPip, setShowPip] = useState(false);
   const contentScrollRef = useRef<HTMLDivElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
+  const lastEvalMsgCountRef = useRef(0); // 上次评审时的消息数
+  const prevNodeIdRef = useRef<string | null>(null); // 追踪上一个节点 ID
 
   const node = nodes.find(n => n.id === fullScreenNodeId);
 
-  // ESC 关闭（带动效）
+  // ESC 关闭（带动效 + 触发评审）
   const handleClose = useCallback(() => {
+    // 关闭前触发认知评审（只要有新对话更新）
+    if (autoCognitionEval && node && aiMessages.length > lastEvalMsgCountRef.current) {
+      triggerCognitionEval(aiMessages);
+    }
     setIsClosing(true);
     setTimeout(() => { setIsClosing(false); closeFullScreen(); }, 250);
-  }, [closeFullScreen]);
+  }, [closeFullScreen, autoCognitionEval, node, aiMessages]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [handleClose]);
+
+  // 快捷键切换 AI 侧栏
+  useEffect(() => {
+    const handler = () => setAiSidebarOpen(v => !v);
+    window.addEventListener('studyboard:toggle-chat', handler);
+    return () => window.removeEventListener('studyboard:toggle-chat', handler);
+  }, []);
 
   // 初始化编辑内容和摘要
   useEffect(() => {
@@ -151,16 +166,54 @@ export function FullScreenDetail() {
     }
   }, [node]);
 
-  // 切换节点时重置 AI 对话、Tab、笔记输入与分化表单
+  // 切换节点时：保存旧节点对话 + 加载新节点对话
   useEffect(() => {
-    setAiMessages([]);
+    const prevId = prevNodeIdRef.current;
+    const newId = fullScreenNodeId;
+
+    // 保存旧节点的对话
+    if (prevId && aiMessages.length > 0) {
+      const prevNode = nodes.find(n => n.id === prevId);
+      if (prevNode) {
+        const convs = prevNode.aiConversations || [];
+        const msgData = aiMessages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp }));
+        const convId = aiConvIdRef.current || nanoid();
+        const existing = convs.find(c => c.id === convId);
+        if (existing) {
+          const updated = convs.map(c => c.id === convId ? { ...c, messages: msgData } : c);
+          updateNode(prevId, { aiConversations: updated });
+        } else {
+          const newConv = { id: convId, messages: msgData, mode: aiMode, createdAt: new Date().toISOString() };
+          updateNode(prevId, { aiConversations: [...convs, newConv] });
+        }
+      }
+    }
+
+    // 加载新节点的最近一次对话
+    if (newId) {
+      const newNode = nodes.find(n => n.id === newId);
+      const lastConv = newNode?.aiConversations?.[newNode.aiConversations.length - 1];
+      if (lastConv && lastConv.messages.length > 0) {
+        setAiMessages(lastConv.messages.map(m => ({ ...m, id: nanoid(), role: m.role as 'user' | 'assistant' })));
+        aiConvIdRef.current = lastConv.id;
+      } else {
+        setAiMessages([]);
+        aiConvIdRef.current = nanoid();
+      }
+    } else {
+      setAiMessages([]);
+      aiConvIdRef.current = null;
+    }
+
     setAiInput('');
     setAiLoading(false);
-    aiConvIdRef.current = null;
     setActiveTab('content');
     setShowSplitForm(false);
     setSplitInstruction('');
     setEditingNoteId(null);
+    setShowAiHistory(false);
+    lastEvalMsgCountRef.current = 0;
+    prevNodeIdRef.current = newId;
   }, [fullScreenNodeId]);
 
   // 消息列表自动滚动到底部
@@ -311,16 +364,16 @@ export function FullScreenDetail() {
     setAiSelectionPopup(null);
   };
 
-  // 续写：将选中文字追加到当前节点最后一条笔记末尾
-  const handleAppendAiSelectionToNote = () => {
+  // 续写：将选中文字追加到指定笔记末尾
+  const handleAppendAiSelectionToNote = (noteId?: string) => {
     if (!aiSelectionPopup || !node) return;
-    const notes = node.notes || [];
-    if (notes.length === 0) {
+    const noteList = node.notes || [];
+    if (noteList.length === 0) {
       addNoteToNode(node.id, aiSelectionPopup.text, 'manual');
     } else {
-      const lastNote = notes[notes.length - 1];
-      const updatedNotes = notes.map(n =>
-        n.id === lastNote.id ? { ...n, content: (n.content ? n.content + '\n\n' : '') + aiSelectionPopup.text } : n
+      const targetId = noteId || noteList[noteList.length - 1].id;
+      const updatedNotes = noteList.map(n =>
+        n.id === targetId ? { ...n, content: (n.content ? n.content + '\n\n' : '') + aiSelectionPopup.text } : n
       );
       updateNode(node.id, { notes: updatedNotes });
     }
@@ -489,27 +542,27 @@ export function FullScreenDetail() {
       }]);
     } finally {
       setAiLoading(false);
-      // 费曼模式自动认知评审
-      if (aiMode === 'feynman' && autoCognitionEval && node) {
-        const msgs = [...aiMessages]; // 当前对话
-        if (msgs.length >= 4) {
-          fetch('/api/evaluate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              conversation: msgs.map(m => ({ role: m.role, content: m.content })),
-              nodeContent: node.content,
-              apiKey: apiKey || undefined,
-            }),
-          }).then(r => r.ok ? r.json() : null).then(data => {
-            if (data && node) {
-              const history = [...(node.cognitionHistory || []), { level: data.level, evaluatedAt: new Date().toISOString(), conversationLength: msgs.length }];
-              updateNode(node.id, { cognitionLevel: data.level, cognitionReason: data.reason, cognitionHistory: history });
-            }
-          }).catch(() => {});
-        }
-      }
     }
+  };
+
+  // 认知评审触发函数（复用）
+  const triggerCognitionEval = (msgs: ChatMessage[]) => {
+    if (!node) return;
+    fetch('/api/evaluate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversation: msgs.map(m => ({ role: m.role, content: m.content })),
+        nodeContent: node.content,
+        notes: (node.notes || []).map(n => n.content).filter(Boolean),
+        apiKey: apiKey || undefined,
+      }),
+    }).then(r => r.ok ? r.json() : null).then(data => {
+      if (data && node) {
+        const history = [...(node.cognitionHistory || []), { level: data.level, evaluatedAt: new Date().toISOString(), conversationLength: msgs.length }];
+        updateNode(node.id, { cognitionLevel: data.level, cognitionReason: data.reason, cognitionHistory: history });
+      }
+    }).catch(() => {});
   };
 
   if (!fullScreenNodeId || !node) return null;
@@ -905,32 +958,119 @@ export function FullScreenDetail() {
               title="拖拽调整宽度"
             />
 
-            {/* 侧栏顶部：加入笔记 + 收起按钮 */}
-            <div className="flex items-center justify-end gap-1.5 px-3 py-2 border-b border-[var(--border)]">
-              {aiMessages.length > 0 && (
+            {/* 侧栏顶部：新建对话 + 历史 + 收起 */}
+            <div className="flex items-center justify-end gap-1 px-3 py-2.5 border-b border-[var(--border)]">
+              <button
+                onClick={() => {
+                  // 保存当前对话后新建
+                  if (node && aiMessages.length > 0) {
+                    const convs = node.aiConversations || [];
+                    const msgData = aiMessages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp }));
+                    const newConv = { id: aiConvIdRef.current || nanoid(), messages: msgData, mode: aiMode, createdAt: new Date().toISOString() };
+                    const existing = convs.find(c => c.id === newConv.id);
+                    const updated = existing ? convs.map(c => c.id === newConv.id ? newConv : c) : [...convs, newConv];
+                    updateNode(node.id, { aiConversations: updated });
+                  }
+                  setAiMessages([]);
+                  aiConvIdRef.current = nanoid();
+                  lastEvalMsgCountRef.current = 0;
+                }}
+                className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
+                title="新建对话"
+              >
+                <Plus size={16} />
+              </button>
+              {(node?.aiConversations?.length || 0) > 0 && (
                 <button
-                  onClick={() => {
-                    if (!node || aiMessages.length === 0) return;
-                    const formatted = aiMessages.map(m =>
-                      m.role === 'user' ? `**我**：${m.content}` : `**AI**：${m.content}`
-                    ).join('\n\n');
-                    addNoteToNode(node.id, formatted, 'chat');
-                  }}
-                  className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md text-[var(--text-secondary)] hover:text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
-                  title="将整段对话加入笔记"
+                  onClick={() => setShowAiHistory(v => !v)}
+                  className={`p-2 rounded-lg transition-colors ${showAiHistory ? 'text-[var(--accent)] bg-[var(--accent-soft)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'}`}
+                  title="对话历史"
                 >
-                  <StickyNote size={12} />
-                  加入笔记
+                  <Clock size={16} />
                 </button>
               )}
               <button
-                onClick={() => setAiSidebarOpen(false)}
-                className="p-1 rounded-md text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+                onClick={() => {
+                  // 关闭侧栏前触发评审（只要有新对话更新）
+                  if (autoCognitionEval && node && aiMessages.length > lastEvalMsgCountRef.current) {
+                    triggerCognitionEval(aiMessages);
+                  }
+                  setAiSidebarOpen(false);
+                }}
+                className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
                 title="收起侧栏"
               >
-                <X size={14} />
+                <X size={16} />
               </button>
             </div>
+
+            {/* 对话历史独立视图 */}
+            {showAiHistory ? (
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[var(--border)]">
+                  <button
+                    onClick={() => setShowAiHistory(false)}
+                    className="flex items-center gap-1 px-2 py-1 text-xs rounded-md text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+                  >
+                    <ChevronDown size={14} className="rotate-90" />
+                    返回对话
+                  </button>
+                  <span className="text-xs text-[var(--text-muted)]">共 {node?.aiConversations?.length || 0} 条</span>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                  {node?.aiConversations && node.aiConversations.length > 0 ? (
+                    <div className="py-1">
+                      {node.aiConversations.map((conv, i) => (
+                        <button
+                          key={conv.id}
+                          onClick={() => {
+                            // 保存当前对话
+                            if (aiMessages.length > 0 && node) {
+                              const convs = node.aiConversations || [];
+                              const msgData = aiMessages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp }));
+                              const cur = { id: aiConvIdRef.current || nanoid(), messages: msgData, mode: aiMode, createdAt: new Date().toISOString() };
+                              const existing = convs.find(c => c.id === cur.id);
+                              const updated = existing ? convs.map(c => c.id === cur.id ? cur : c) : [...convs, cur];
+                              updateNode(node.id, { aiConversations: updated });
+                            }
+                            // 加载选中的历史对话
+                            setAiMessages(conv.messages.map(m => ({ ...m, id: nanoid(), role: m.role as 'user' | 'assistant' })));
+                            aiConvIdRef.current = conv.id;
+                            lastEvalMsgCountRef.current = conv.messages.length;
+                            setShowAiHistory(false);
+                          }}
+                          className={`w-full text-left px-3 py-2.5 hover:bg-[var(--bg-hover)] transition-colors group ${
+                            conv.id === aiConvIdRef.current ? 'bg-[var(--accent-soft)]' : ''
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                              conv.mode === 'feynman' ? 'bg-green-500/80' : conv.mode === 'debate' ? 'bg-red-500/80' : conv.mode === 'design' ? 'bg-purple-500/80' : 'bg-blue-500/80'
+                            } text-white`}>
+                              {conv.mode === 'feynman' ? '费曼' : conv.mode === 'debate' ? '辩论' : conv.mode === 'design' ? '设计' : '学习'}
+                            </span>
+                            <span className={`text-xs truncate flex-1 transition-colors ${
+                              conv.id === aiConvIdRef.current ? 'text-[var(--accent)]' : 'text-[var(--text-primary)] group-hover:text-[var(--accent)]'
+                            }`}>
+                              对话 {i + 1} · {conv.messages.length} 条
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-[var(--text-muted)] mt-0.5 pl-0.5">
+                            {conv.messages[0]?.content?.slice(0, 30) || '空对话'}
+                          </p>
+                          <p className="text-[10px] text-[var(--text-muted)] mt-0.5 pl-0.5">
+                            {new Date(conv.createdAt).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="px-4 py-8 text-center text-xs text-[var(--text-muted)]">暂无历史对话</p>
+                  )}
+                </div>
+              </div>
+            ) : (
+            <>
 
             {/* 当前节点上下文提示 + 认知同心圆 */}
             <div className="px-4 py-1.5 bg-[var(--accent-soft)] border-b border-[var(--accent)]/20 flex items-center gap-2">
@@ -1033,15 +1173,28 @@ export function FullScreenDetail() {
               )}
               {aiMessages.map((msg) => (
                 <div key={msg.id}
-                  className={`text-sm ${msg.role === 'user' ? 'text-right' : ''}`}
+                  className={`group/msg text-sm ${msg.role === 'user' ? 'text-right' : ''}`}
                   style={{ animation: 'msgIn 200ms ease-out' }}>
                   {msg.role === 'user' ? (
                     <div className="inline-block max-w-[90%] text-left px-3 py-2 rounded-lg bg-[var(--accent)] text-white">
                       {msg.content}
                     </div>
                   ) : (
-                    <div className="inline-block max-w-[95%] px-3 py-2 rounded-lg bg-[var(--bg-tertiary)] text-[var(--text-primary)]">
-                      <MarkdownRenderer content={msg.content} className="text-sm" />
+                    <div className="max-w-[95%]">
+                      <div className="inline-block px-3 py-2 rounded-lg bg-[var(--bg-tertiary)] text-[var(--text-primary)]">
+                        <MarkdownRenderer content={msg.content} className="text-sm" />
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (!node) return;
+                          addNoteToNode(node.id, msg.content, 'chat');
+                        }}
+                        className="mt-1 ml-1 flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-full text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors opacity-0 group-hover/msg:opacity-100"
+                        title="将此回复加入笔记"
+                      >
+                        <StickyNote size={10} />
+                        加入笔记
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1057,35 +1210,35 @@ export function FullScreenDetail() {
 
             {/* 圈选确认浮层 */}
             {aiSelectionPopup && (
-              <div
-                className="fixed z-[300] w-64 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-primary)] shadow-2xl p-3"
-                style={{ left: Math.min(aiSelectionPopup.x, window.innerWidth - 280), top: Math.min(aiSelectionPopup.y + 8, window.innerHeight - 140), animation: 'fadeIn 120ms ease-out' }}
-              >
-                <p className="text-[10px] text-[var(--text-muted)] mb-1.5">将以下内容加入笔记：</p>
-                <p className="text-xs text-[var(--text-secondary)] line-clamp-3 mb-2.5 leading-relaxed">“{aiSelectionPopup.text}”</p>
-                <div className="flex items-center justify-end gap-1.5">
-                  <button
-                    onClick={() => { setAiSelectionPopup(null); window.getSelection()?.removeAllRanges(); }}
-                    className="px-2.5 py-1 text-[11px] rounded-md text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
-                  >
-                    取消
-                  </button>
-                  <button
-                    onClick={handleAppendAiSelectionToNote}
-                    className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-md border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors"
-                    title="续写到笔记末尾"
-                  >
-                    续写 ⊕
-                  </button>
-                  <button
-                    onClick={handleAddAiSelectionToNote}
-                    className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-md bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] transition-colors"
-                  >
-                    <StickyNote size={11} />
-                    加入笔记
-                  </button>
-                </div>
-              </div>
+              <SelectionPopup
+                text={aiSelectionPopup.text}
+                initialX={aiSelectionPopup.x}
+                initialY={aiSelectionPopup.y}
+                onClose={() => { setAiSelectionPopup(null); window.getSelection()?.removeAllRanges(); }}
+                onAddToNote={handleAddAiSelectionToNote}
+                onAppendToNote={handleAppendAiSelectionToNote}
+                notes={(node.notes || []).map(n => ({ id: n.id, content: n.content }))}
+                onCreateNode={() => {
+                  if (!aiSelectionPopup || !node) return;
+                  const text = aiSelectionPopup.text.trim();
+                  if (!text) return;
+                  const now = new Date().toISOString();
+                  const { currentBoardId } = useBoardStore.getState();
+                  useGraphStore.getState().addNode({
+                    id: `node-${nanoid(8)}`,
+                    boardId: currentBoardId || node.boardId,
+                    type: 'understanding',
+                    title: text.length > 24 ? text.slice(0, 24) + '…' : text,
+                    content: text,
+                    level: 3,
+                    status: 'lit',
+                    position: { x: (node.position?.x || 0) + Math.random() * 200 - 100, y: (node.position?.y || 0) + Math.random() * 200 - 100 },
+                    metadata: { createdAt: now, updatedAt: now },
+                  });
+                  window.getSelection()?.removeAllRanges();
+                  setAiSelectionPopup(null);
+                }}
+              />
             )}
 
             {/* 输入框 */}
@@ -1107,6 +1260,8 @@ export function FullScreenDetail() {
                 </button>
               </div>
             </div>
+            </>
+            )}
           </div>
         )}
       </div>

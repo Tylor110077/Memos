@@ -8,6 +8,7 @@ export const DEFAULT_SHORTCUTS: Record<string, string> = {
   focusChat: 'mod+k',        // 聚焦对话输入框
   newChat: 'mod+shift+n',    // 新建对话
   fitView: 'mod+f',          // 适配视图
+  toggleChat: 'mod+j',       // 展开/关闭对话栏
 };
 
 export interface MemosSettings {
@@ -23,17 +24,28 @@ export interface MemosSettings {
   apiKey: string;
   /** 费曼对话结束后自动触发认知评审 */
   autoCognitionEval: boolean;
+  /** 节点类型颜色配置 */
+  nodeColors: Record<string, string>;
 }
 
 const STORAGE_KEY = 'memos-settings';
 
+export const DEFAULT_NODE_COLORS: Record<string, string> = {
+  concept: '#8b5cf6',
+  theme: '#a78bfa',
+  material: '#22d3ee',
+  understanding: '#60a5fa',
+  question: '#c084fc',
+};
+
 const DEFAULT_SETTINGS: MemosSettings = {
-  autoRecommend: false, // 默认点击生成，不自动推荐
-  responseStyle: 'balanced', // 默认适中
+  autoRecommend: false,
+  responseStyle: 'balanced',
   customStyle: '',
   shortcuts: { ...DEFAULT_SHORTCUTS },
   apiKey: '',
   autoCognitionEval: true,
+  nodeColors: { ...DEFAULT_NODE_COLORS },
 };
 
 function loadSettings(): MemosSettings {
@@ -47,6 +59,8 @@ function loadSettings(): MemosSettings {
       ...parsed,
       // 合并快捷键：保留用户自定义，补齐新增的默认项
       shortcuts: { ...DEFAULT_SHORTCUTS, ...(parsed.shortcuts || {}) },
+      // 合并节点颜色：保留用户自定义，补齐新增的默认项
+      nodeColors: { ...DEFAULT_NODE_COLORS, ...(parsed.nodeColors || {}) },
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -63,6 +77,7 @@ function persist(next: MemosSettings) {
       shortcuts: next.shortcuts,
       apiKey: next.apiKey,
       autoCognitionEval: next.autoCognitionEval,
+      nodeColors: next.nodeColors,
     }));
   } catch {
     /* ignore */
@@ -78,6 +93,7 @@ interface SettingsState extends MemosSettings {
   setShortcut: (action: string, key: string) => void;
   setApiKey: (key: string) => void;
   setAutoCognitionEval: (value: boolean) => void;
+  setNodeColor: (type: string, color: string) => void;
   resetSettings: () => void;
   /** 客户端挂载后调用，从 localStorage 加载用户设置 */
   hydrate: () => void;
@@ -134,6 +150,14 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       const next = { ...state, autoCognitionEval: value };
       persist(next);
       return { autoCognitionEval: value };
+    }),
+
+  setNodeColor: (type, color) =>
+    set((state) => {
+      const nodeColors = { ...state.nodeColors, [type]: color };
+      const next = { ...state, nodeColors };
+      persist(next);
+      return { nodeColors };
     }),
 
   resetSettings: () =>

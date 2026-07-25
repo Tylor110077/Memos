@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { Message } from 'ai';
-import { Sparkles, Check, Loader2, StickyNote } from 'lucide-react';
+import { Sparkles, Check, Loader2, StickyNote, Copy, Pencil } from 'lucide-react';
 import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { useGraphStore } from '@/stores/graphStore';
 import { useBoardStore } from '@/stores/boardStore';
@@ -15,11 +15,14 @@ interface MessageBubbleProps {
   onSelectChange?: (checked: boolean) => void;
 }
 
-export default function MessageBubble({ message, selected = false, onSelectChange }: MessageBubbleProps) {
+export default function MessageBubble({ message, selected = false, onSelectChange, onEditMessage }: MessageBubbleProps & { onEditMessage?: (id: string, newContent: string) => void }) {
   const isUser = message.role === 'user';
   const [isGenerating, setIsGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
   const [noteAdded, setNoteAdded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState('');
   const { nodes, applyGraphChanges, addNode, addNoteToNode, selectedNodeId } = useGraphStore();
   const { currentBoardId } = useBoardStore();
 
@@ -66,6 +69,26 @@ export default function MessageBubble({ message, selected = false, onSelectChang
 
   const handleGenerate = isUser ? handleGenerateFromUser : handleGenerateFromAi;
 
+  const handleCopy = () => {
+    const text = typeof message.content === 'string' ? message.content : '';
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  const handleStartEdit = () => {
+    setEditText(typeof message.content === 'string' ? message.content : '');
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (editText.trim() && onEditMessage) {
+      onEditMessage(message.id, editText.trim());
+    }
+    setIsEditing(false);
+  };
+
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 group`}>
       <div className={`relative max-w-[85%] ${isUser ? 'items-end' : 'items-start'} flex flex-col`}>
@@ -76,14 +99,52 @@ export default function MessageBubble({ message, selected = false, onSelectChang
               : 'bg-[var(--bg-tertiary)] text-[var(--text-primary)] rounded-bl-md'
           }`}
         >
-          {isUser ? (
+          {isEditing ? (
+            <div className="flex flex-col gap-2">
+              <textarea
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSaveEdit(); if (e.key === 'Escape') setIsEditing(false); }}
+                className="w-full min-h-[60px] bg-transparent text-sm text-white/90 resize-none focus:outline-none border border-white/20 rounded-lg p-2"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button onClick={handleSaveEdit} className="px-2 py-0.5 text-[10px] rounded bg-white/20 text-white hover:bg-white/30">保存 ⌘</button>
+                <button onClick={() => setIsEditing(false)} className="px-2 py-0.5 text-[10px] rounded text-white/60 hover:text-white">取消</button>
+              </div>
+            </div>
+          ) : isUser ? (
             <p className="whitespace-pre-wrap">{message.content}</p>
           ) : (
             <MarkdownRenderer content={message.content} />
           )}
         </div>
         {/* 操作区：悬停浮现，圆润融入背景 */}
-        <div className={`flex items-center gap-2 mt-1.5 px-1 transition-opacity duration-200 ${generated ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} ${isUser ? 'flex-row-reverse' : ''}`}>
+        <div className={`flex items-center gap-2 mt-1.5 px-1 transition-opacity duration-200 ${generated || copied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} ${isUser ? 'flex-row-reverse' : ''}`}>
+          {/* 复制按钮（AI 消息） */}
+          {!isUser && (
+            <button
+              onClick={handleCopy}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] transition-all ${
+                copied ? 'text-green-400 bg-green-400/10' : 'text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-soft)]'
+              }`}
+              title="复制内容"
+            >
+              {copied ? <Check size={12} /> : <Copy size={12} />}
+              {copied ? '已复制' : '复制'}
+            </button>
+          )}
+          {/* 编辑按钮（用户消息） */}
+          {isUser && onEditMessage && (
+            <button
+              onClick={handleStartEdit}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-all"
+              title="编辑消息"
+            >
+              <Pencil size={12} />
+              编辑
+            </button>
+          )}
           <button
             onClick={handleGenerate}
             disabled={isGenerating || generated}

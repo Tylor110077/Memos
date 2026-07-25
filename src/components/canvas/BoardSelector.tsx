@@ -42,7 +42,7 @@ export function BoardSelector() {
 
       {/* 下拉列表 */}
       {isOpen && (
-        <div className="mt-1 w-[200px] rounded-lg bg-[var(--bg-secondary)]/95 border border-[var(--border)] shadow-xl py-1 backdrop-blur-sm">
+        <div className="mt-1 w-[200px] rounded-lg bg-[var(--bg-secondary)]/95 border border-[var(--border)] shadow-xl py-1 px-1.5 backdrop-blur-sm">
           {boards.map(board => (
             <div key={board.id} className={`group flex items-center px-1 rounded-md transition-colors ${board.id === currentBoardId ? 'bg-[var(--accent-soft)]' : 'hover:bg-[var(--bg-hover)]'}`}>
               {editingId === board.id ? (
