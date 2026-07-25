@@ -63,7 +63,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 }
 
 export function SettingsModal({ visible, onClose }: SettingsModalProps) {
-  const { autoRecommend, setAutoRecommend, resetSettings, responseStyle, setResponseStyle, customStyle, setCustomStyle, shortcuts, setShortcut, apiKey, setApiKey } = useSettingsStore();
+  const { autoRecommend, setAutoRecommend, resetSettings, responseStyle, setResponseStyle, customStyle, setCustomStyle, shortcuts, setShortcut, apiKey, setApiKey, autoCognitionEval, setAutoCognitionEval } = useSettingsStore();
   const [currentTheme, setCurrentTheme] = useState('abyss');
   const [apiKeyDraft, setApiKeyDraft] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
@@ -212,6 +212,22 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
                 </div>
               </div>
               <Toggle checked={autoRecommend} onChange={setAutoRecommend} />
+            </div>
+
+            {/* 自动认知评审 */}
+            <div className="flex items-start justify-between gap-4 p-4 rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] mt-3">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-[var(--accent-soft)] flex items-center justify-center shrink-0 mt-0.5">
+                  <Sparkles size={15} className="text-[var(--accent)]" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-[var(--text-primary)]">自动认知评审</p>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
+                    费曼模式对话结束后，AI 自动评估你的理解程度并更新同心圆。
+                  </p>
+                </div>
+              </div>
+              <Toggle checked={autoCognitionEval} onChange={setAutoCognitionEval} />
             </div>
 
             {/* 回答风格 */}

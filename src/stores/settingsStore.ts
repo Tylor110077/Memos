@@ -21,6 +21,8 @@ export interface MemosSettings {
   shortcuts: Record<string, string>;
   /** AI API Key（阿里千问 Qwen） */
   apiKey: string;
+  /** 费曼对话结束后自动触发认知评审 */
+  autoCognitionEval: boolean;
 }
 
 const STORAGE_KEY = 'memos-settings';
@@ -31,6 +33,7 @@ const DEFAULT_SETTINGS: MemosSettings = {
   customStyle: '',
   shortcuts: { ...DEFAULT_SHORTCUTS },
   apiKey: '',
+  autoCognitionEval: true,
 };
 
 function loadSettings(): MemosSettings {
@@ -59,6 +62,7 @@ function persist(next: MemosSettings) {
       customStyle: next.customStyle,
       shortcuts: next.shortcuts,
       apiKey: next.apiKey,
+      autoCognitionEval: next.autoCognitionEval,
     }));
   } catch {
     /* ignore */
@@ -73,6 +77,7 @@ interface SettingsState extends MemosSettings {
   setCustomStyle: (value: string) => void;
   setShortcut: (action: string, key: string) => void;
   setApiKey: (key: string) => void;
+  setAutoCognitionEval: (value: boolean) => void;
   resetSettings: () => void;
   /** 客户端挂载后调用，从 localStorage 加载用户设置 */
   hydrate: () => void;
@@ -122,6 +127,13 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       const next = { ...state, apiKey: key };
       persist(next);
       return { apiKey: key };
+    }),
+
+  setAutoCognitionEval: (value) =>
+    set((state) => {
+      const next = { ...state, autoCognitionEval: value };
+      persist(next);
+      return { autoCognitionEval: value };
     }),
 
   resetSettings: () =>

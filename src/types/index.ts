@@ -26,6 +26,9 @@ export interface KnowledgeNode {
   notes?: NoteEntry[];                         // 用户笔记
   whiteboard?: string;                         // Excalidraw 白板数据（JSON）
   whiteboardThumbnail?: string;                // 白板缩略图（data URL）
+  cognitionLevel?: number;                     // 1-5 认知档位
+  cognitionReason?: string;                    // AI 评审理由
+  cognitionHistory?: { level: number; evaluatedAt: string; conversationLength: number }[];
   metadata: NodeMetadata;
 }
 

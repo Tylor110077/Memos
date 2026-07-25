@@ -14,6 +14,8 @@ import { DocxPreview } from '@/components/file-preview/DocxPreview';
 import { XlsxPreview } from '@/components/file-preview/XlsxPreview';
 import { PptxPreview } from '@/components/file-preview/PptxPreview';
 import { MarkdownEditor } from '@/components/file-preview/MarkdownEditor';
+import { PipWindow } from '@/components/pip/PipWindow';
+import { CognitionRing } from '@/components/cognition/CognitionRing';
 import { createConversation, updateConversation } from '@/lib/db';
 import type { ChatMessage, ChatMode, ResponseStyle, NoteKind, KnowledgeNode, KnowledgeEdge, NodeType } from '@/types';
 
@@ -77,7 +79,7 @@ export function FullScreenDetail() {
   const { fullScreenNodeId, closeFullScreen } = useUIStore();
   const { nodes, edges, updateNode, removeNode, applyGraphChanges, addNoteToNode } = useGraphStore();
   const { boards } = useBoardStore();
-  const { customStyle, responseStyle, setResponseStyle, apiKey } = useSettingsStore();
+  const { customStyle, responseStyle, setResponseStyle, apiKey, autoCognitionEval } = useSettingsStore();
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -487,6 +489,26 @@ export function FullScreenDetail() {
       }]);
     } finally {
       setAiLoading(false);
+      // 费曼模式自动认知评审
+      if (aiMode === 'feynman' && autoCognitionEval && node) {
+        const msgs = [...aiMessages]; // 当前对话
+        if (msgs.length >= 4) {
+          fetch('/api/evaluate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              conversation: msgs.map(m => ({ role: m.role, content: m.content })),
+              nodeContent: node.content,
+              apiKey: apiKey || undefined,
+            }),
+          }).then(r => r.ok ? r.json() : null).then(data => {
+            if (data && node) {
+              const history = [...(node.cognitionHistory || []), { level: data.level, evaluatedAt: new Date().toISOString(), conversationLength: msgs.length }];
+              updateNode(node.id, { cognitionLevel: data.level, cognitionReason: data.reason, cognitionHistory: history });
+            }
+          }).catch(() => {});
+        }
+      }
     }
   };
 
@@ -841,31 +863,22 @@ export function FullScreenDetail() {
           </div>
 
             {/* 画中画小窗：内容区滚出视口时显示 */}
-            {showPip && (
-              <div
-                className="absolute bottom-4 right-4 w-[220px] rounded-xl border border-[var(--border-strong)] bg-[var(--bg-secondary)] shadow-2xl overflow-hidden z-20"
-                style={{ animation: 'fadeIn 200ms ease-out' }}
-              >
-                <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--bg-tertiary)] border-b border-[var(--border)]">
-                  <span className="text-[10px] text-[var(--text-muted)] truncate">{node.title}</span>
-                  <button
-                    onClick={() => contentScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
-                    className="text-[10px] text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors shrink-0 ml-2"
-                  >
-                    ↑ 回到顶部
-                  </button>
+            <PipWindow
+              visible={showPip}
+              title={node.title}
+              onClose={() => setShowPip(false)}
+              onScrollToTop={() => contentScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+            >
+              {isPdfFile && node.fileData ? (
+                <iframe src={node.fileData} className="w-full h-full border-0" title="pip" />
+              ) : isWebMaterial ? (
+                <iframe src={node.metadata.source} className="w-full h-full border-0" title="pip" sandbox="allow-scripts allow-same-origin" />
+              ) : (
+                <div className="p-2">
+                  <MarkdownRenderer content={(node.content || '').slice(0, 500)} className="text-xs" />
                 </div>
-                <div className="h-[140px] overflow-hidden pointer-events-none opacity-80 scale-[0.98] origin-top-left" style={{ width: '102%' }}>
-                  {isPdfFile && node.fileData ? (
-                    <iframe src={node.fileData} className="w-full h-full border-0 pointer-events-none" title="pip" />
-                  ) : (
-                    <div className="p-2 text-xs text-[var(--text-secondary)] line-clamp-6">
-                      <MarkdownRenderer content={(node.content || '').slice(0, 300)} className="text-xs" />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+              )}
+            </PipWindow>
           </div>
           ) : (
             /* 白板 Tab：带边界感和空隙 */
@@ -919,10 +932,13 @@ export function FullScreenDetail() {
               </button>
             </div>
 
-            {/* 当前节点上下文提示 */}
+            {/* 当前节点上下文提示 + 认知同心圆 */}
             <div className="px-4 py-1.5 bg-[var(--accent-soft)] border-b border-[var(--accent)]/20 flex items-center gap-2">
               <span className="shrink-0 text-[10px] text-[var(--accent)]">当前上下文</span>
-              <span className="text-xs text-[var(--accent)] truncate">{node.title}</span>
+              <span className="text-xs text-[var(--accent)] truncate flex-1">{node.title}</span>
+              {node.cognitionLevel !== undefined && node.cognitionLevel > 0 && (
+                <CognitionRing level={node.cognitionLevel} reason={node.cognitionReason} size={32} />
+              )}
             </div>
 
             {/* 控制栏：圈选 / 风格 / 模式，右对齐 */}
