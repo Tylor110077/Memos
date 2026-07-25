@@ -266,7 +266,9 @@ export function RightPanel() {
               </div>
             ) : (
               <>
-                {activeTab === 'chat' && <ChatPanel visible={true} onClose={() => setCollapsed(true)} />}
+                <div className={activeTab === 'chat' ? 'h-full flex flex-col' : 'hidden'}>
+                  <ChatPanel visible={activeTab === 'chat'} onClose={() => setCollapsed(true)} />
+                </div>
                 {activeTab === 'detail' && <NodeDetail />}
               </>
             )}

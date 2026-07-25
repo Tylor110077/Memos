@@ -63,7 +63,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 }
 
 export function SettingsModal({ visible, onClose }: SettingsModalProps) {
-  const { autoRecommend, setAutoRecommend, resetSettings, responseStyle, setResponseStyle, shortcuts, setShortcut, apiKey, setApiKey } = useSettingsStore();
+  const { autoRecommend, setAutoRecommend, resetSettings, responseStyle, setResponseStyle, customStyle, setCustomStyle, shortcuts, setShortcut, apiKey, setApiKey } = useSettingsStore();
   const [currentTheme, setCurrentTheme] = useState('abyss');
   const [apiKeyDraft, setApiKeyDraft] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
@@ -243,6 +243,21 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
                 ))}
               </div>
             </div>
+
+            {/* 自定义风格输入（选中"自定义"时显示） */}
+            {responseStyle === 'custom' && (
+              <div className="mt-3 p-4 rounded-xl border border-[var(--border)] bg-[var(--bg-primary)]" style={{ animation: 'fadeIn 150ms ease-out' }}>
+                <p className="text-xs text-[var(--text-secondary)] mb-2">用你自己的话描述想要的回答风格：</p>
+                <textarea
+                  value={customStyle}
+                  onChange={(e) => setCustomStyle(e.target.value)}
+                  placeholder="例如：像给朋友讲故事一样，多用比喻，语气轻松幽默…"
+                  rows={3}
+                  className="w-full resize-none bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors leading-relaxed"
+                />
+                <p className="text-[10px] text-[var(--text-muted)] mt-1.5">保存后全局生效，主对话与 AI 助手均使用此风格。</p>
+              </div>
+            )}
           </section>
 
           {/* 快捷键 */}

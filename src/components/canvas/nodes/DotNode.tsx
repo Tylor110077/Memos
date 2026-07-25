@@ -35,32 +35,44 @@ export function DotNode({ data, selected }: NodeProps) {
   // unlit 节点显示为暗灰色
   const color = isUnlit ? '#4b5563' : (TYPE_COLORS[nodeType] ?? 'var(--text-muted)');
 
+  // 文件类型节点：用文件图标替代圆点
+  const isFileNode = nodeType === 'material' && !!materialType;
+  const fileIconSize = level === 0 ? 28 : level === 1 ? 24 : level === 2 ? 20 : 16;
+
   return (
     <div
-      className="relative transition-opacity duration-200"
-      style={{ opacity: isDimmed ? 0.15 : 1, width: size, height: size }}
+      className="relative transition-opacity duration-200 flex items-center justify-center"
+      style={{ opacity: isDimmed ? 0.15 : 1, width: isFileNode ? fileIconSize : size, height: isFileNode ? fileIconSize : size }}
     >
-      {/* Handle 精确居中于圆点（零尺寸，无偏移） */}
+      {/* Handle 精确居中于节点（零尺寸，无偏移） */}
       <Handle type="target" position={Position.Top} style={{ opacity: 0, width: 1, height: 1, minWidth: 0, minHeight: 0, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', border: 'none', padding: 0, margin: 0 }} />
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0, width: 1, height: 1, minWidth: 0, minHeight: 0, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', border: 'none', padding: 0, margin: 0 }} />
 
-      {/* 圆点 */}
-      <div
-        className="w-full h-full rounded-full transition-transform duration-150"
-        style={{
-          backgroundColor: color,
-          boxShadow: isMultiSelected
-            ? `0 0 0 2px var(--bg-primary), 0 0 0 3.5px var(--accent)`
-            : isHovered || selected ? `0 0 8px ${color}` : 'none',
-          transform: isHovered ? 'scale(1.4)' : 'scale(1)',
-        }}
-      />
-
-      {/* 文件类型图标（材料节点且有文件类型时显示） */}
-      {nodeType === 'material' && materialType && (
-        <div className="absolute -top-1 -right-3">
-          <FileTypeIcon type={materialType} fileName={fileName} size={14} />
+      {isFileNode ? (
+        /* 文件类型节点：直接用文件图标 */
+        <div
+          className="transition-transform duration-150"
+          style={{
+            transform: isHovered ? 'scale(1.2)' : 'scale(1)',
+            filter: isMultiSelected
+              ? 'drop-shadow(0 0 3px var(--accent))'
+              : isHovered || selected ? 'drop-shadow(0 0 4px rgba(255,255,255,0.3))' : 'none',
+          }}
+        >
+          <FileTypeIcon type={materialType} fileName={fileName} size={fileIconSize} />
         </div>
+      ) : (
+        /* 普通节点：圆点 */
+        <div
+          className="w-full h-full rounded-full transition-transform duration-150"
+          style={{
+            backgroundColor: color,
+            boxShadow: isMultiSelected
+              ? `0 0 0 2px var(--bg-primary), 0 0 0 3.5px var(--accent)`
+              : isHovered || selected ? `0 0 8px ${color}` : 'none',
+            transform: isHovered ? 'scale(1.4)' : 'scale(1)',
+          }}
+        />
       )}
 
       {/* 文字标签（绝对定位，不影响节点尺寸） */}

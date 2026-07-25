@@ -77,13 +77,14 @@ export function FullScreenDetail() {
   const { fullScreenNodeId, closeFullScreen } = useUIStore();
   const { nodes, edges, updateNode, removeNode, applyGraphChanges, addNoteToNode } = useGraphStore();
   const { boards } = useBoardStore();
-  const { customStyle, setCustomStyle, responseStyle, setResponseStyle, apiKey } = useSettingsStore();
+  const { customStyle, responseStyle, setResponseStyle, apiKey } = useSettingsStore();
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
-  const [editingNoteId, setEditingNoteId] = useState<string | null>(null); // 当前正在编辑的笔记 ID
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [iframeLoading, setIframeLoading] = useState(true);
+  const [isClosing, setIsClosing] = useState(false); // 关闭动效状态
 
   // ===== Tab 切换（内容 / 白板） =====
   const [activeTab, setActiveTab] = useState<'content' | 'whiteboard'>('content');
@@ -109,7 +110,6 @@ export function FullScreenDetail() {
   // ===== 回答风格切换（使用全局设置） =====
   const [styleDropdownOpen, setStyleDropdownOpen] = useState(false);
   const styleDropdownRef = useRef<HTMLDivElement>(null);
-  const [customStyleDraft, setCustomStyleDraft] = useState(customStyle); // 自定义风格输入草稿
 
   // ===== AI 侧栏圈选加入笔记 =====
   const [aiSelectionMode, setAiSelectionMode] = useState(false);
@@ -120,14 +120,24 @@ export function FullScreenDetail() {
   const [isResizing, setIsResizing] = useState(false);
   const resizeStartRef = useRef({ x: 0, width: 0 });
 
+  // ===== 画中画（B站式滚动小窗） =====
+  const [showPip, setShowPip] = useState(false);
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+  const contentAreaRef = useRef<HTMLDivElement>(null);
+
   const node = nodes.find(n => n.id === fullScreenNodeId);
 
-  // ESC 关闭
+  // ESC 关闭（带动效）
+  const handleClose = useCallback(() => {
+    setIsClosing(true);
+    setTimeout(() => { setIsClosing(false); closeFullScreen(); }, 250);
+  }, [closeFullScreen]);
+
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeFullScreen(); };
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [closeFullScreen]);
+  }, [handleClose]);
 
   // 初始化编辑内容和摘要
   useEffect(() => {
@@ -155,6 +165,21 @@ export function FullScreenDetail() {
   useEffect(() => {
     aiListRef.current?.scrollTo({ top: aiListRef.current.scrollHeight, behavior: 'smooth' });
   }, [aiMessages, aiLoading]);
+
+  // 画中画：监听内容区滚动，当内容区滚出视口时显示小窗
+  useEffect(() => {
+    const el = contentScrollRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const contentEl = contentAreaRef.current;
+      if (!contentEl) return;
+      // 内容区底部相对于滚动容器的位置
+      const contentBottom = contentEl.offsetTop + contentEl.offsetHeight;
+      setShowPip(el.scrollTop > contentBottom - 60);
+    };
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [activeTab, fullScreenNodeId]);
 
   // 点击外部关闭模式/风格下拉
   useEffect(() => {
@@ -293,7 +318,7 @@ export function FullScreenDetail() {
     } else {
       const lastNote = notes[notes.length - 1];
       const updatedNotes = notes.map(n =>
-        n.id === lastNote.id ? { ...n, content: n.content + '\n' + aiSelectionPopup.text } : n
+        n.id === lastNote.id ? { ...n, content: (n.content ? n.content + '\n\n' : '') + aiSelectionPopup.text } : n
       );
       updateNode(node.id, { notes: updatedNotes });
     }
@@ -487,7 +512,7 @@ export function FullScreenDetail() {
     >
       {/* T-530: 内容卡片 — 不完全覆盖 */}
       <div className="relative w-[calc(100%-80px)] h-[calc(100%-80px)] max-md:w-[calc(100%-32px)] max-md:h-[calc(100%-32px)] md:max-lg:w-[calc(100%-64px)] md:max-lg:h-[calc(100%-64px)] rounded-2xl shadow-2xl bg-[var(--bg-primary)] overflow-hidden flex"
-        style={{ animation: 'scaleIn 350ms ease-out' }}>
+        style={{ animation: isClosing ? 'scaleOut 250ms ease-in forwards' : 'scaleIn 350ms ease-out' }}>
 
         {/* 主内容区 */}
         <div className="flex-1 min-w-0 flex flex-col bg-[var(--bg-secondary)]">
@@ -527,7 +552,7 @@ export function FullScreenDetail() {
               >
                 <MessageSquare size={18} />
               </button>
-              <button onClick={closeFullScreen} className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
+              <button onClick={handleClose} className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
                 <X size={20} />
               </button>
             </div>
@@ -590,11 +615,13 @@ export function FullScreenDetail() {
 
           {/* Content Area */}
           {activeTab === 'content' ? (
-          <div className="flex-1 overflow-hidden flex flex-col">
+          <div className="flex-1 relative overflow-hidden flex flex-col">
+          <div ref={contentScrollRef} className="flex-1 overflow-y-auto flex flex-col">
+            {/* 内容展示区：自然高度，随滚动流动。key=node.id 确保 notes 变化不重建 iframe */}
+            <div ref={contentAreaRef} key={node.id}>
             {isPdfFile && node.fileData ? (
               /* PDF 文件节点：使用 dataURL 渲染 */
-              <div className="flex-1 flex flex-col">
-                <div className="flex-1 relative border-b border-[var(--border)]">
+              <div className="h-[75vh] min-h-[400px] relative border-b border-[var(--border)]">
                   {iframeLoading && (
                     <div className="absolute inset-0 flex items-center justify-center bg-[var(--bg-tertiary)] z-10">
                       <Loader2 size={24} className="animate-spin text-[var(--text-muted)]" />
@@ -607,7 +634,6 @@ export function FullScreenDetail() {
                     title={node.title}
                     onLoad={() => setIframeLoading(false)}
                   />
-                </div>
               </div>
             ) : isDocxFile && node.fileData ? (
               /* Word 文档节点 */
@@ -631,9 +657,9 @@ export function FullScreenDetail() {
                 />
               </div>
             ) : isWebMaterial ? (
-              /* 网页材料节点：iframe 嵌入原文 */
-              <div className="flex-1 flex flex-col">
-                <div className="flex-1 relative border-b border-[var(--border)]">
+              /* 网页材料节点：iframe 嵌入原文 + 摘要 */
+              <>
+              <div className="h-[75vh] min-h-[400px] relative border-b border-[var(--border)]">
                   {iframeLoading && (
                     <div className="absolute inset-0 flex items-center justify-center bg-[var(--bg-tertiary)] z-10">
                       <Loader2 size={24} className="animate-spin text-[var(--text-muted)]" />
@@ -647,10 +673,10 @@ export function FullScreenDetail() {
                     sandbox="allow-scripts allow-same-origin allow-popups"
                     onLoad={() => setIframeLoading(false)}
                   />
-                </div>
+              </div>
                 {/* 抓取的内容/摘要 */}
                 {node.content && (
-                  <div className="h-[200px] overflow-y-auto px-6 py-4 bg-[var(--bg-primary)]">
+                  <div className="px-6 py-4">
                     <div className="max-w-3xl mx-auto">
                       <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-1">
                         <FileText size={14} /> 内容摘要
@@ -659,12 +685,11 @@ export function FullScreenDetail() {
                     </div>
                   </div>
                 )}
-              </div>
+              </>
             ) : (
               /* 文本节点：主要内容框 + 摘要框 */
-              <div className="flex-1 flex flex-col">
-                <div className="flex-1 overflow-y-auto px-6 py-4">
-                  <div className="max-w-3xl mx-auto">
+              <div className="px-6 py-4">
+                <div className="max-w-3xl mx-auto">
                     {/* 主要内容框：平时透明，编辑时显现边框 */}
                     <div
                       className={`group/content relative rounded-xl transition-all duration-200 ${
@@ -745,11 +770,11 @@ export function FullScreenDetail() {
                     )}
                   </div>
                 </div>
-              </div>
             )}
+            </div>{/* end contentAreaRef */}
 
             {/* 笔记区：所有节点类型共享 */}
-            <div className="max-w-3xl mx-auto px-6 pt-4 pb-4">
+            <div className="max-w-3xl mx-auto w-full px-6 mt-4 pt-4 pb-4 border-t border-[var(--border)]">
               <div className="flex items-center gap-2 mb-3">
                 <h3 className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-1">
                   <PenLine size={12} /> 笔记
@@ -814,6 +839,34 @@ export function FullScreenDetail() {
               )}
             </div>
           </div>
+
+            {/* 画中画小窗：内容区滚出视口时显示 */}
+            {showPip && (
+              <div
+                className="absolute bottom-4 right-4 w-[220px] rounded-xl border border-[var(--border-strong)] bg-[var(--bg-secondary)] shadow-2xl overflow-hidden z-20"
+                style={{ animation: 'fadeIn 200ms ease-out' }}
+              >
+                <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--bg-tertiary)] border-b border-[var(--border)]">
+                  <span className="text-[10px] text-[var(--text-muted)] truncate">{node.title}</span>
+                  <button
+                    onClick={() => contentScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+                    className="text-[10px] text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors shrink-0 ml-2"
+                  >
+                    ↑ 回到顶部
+                  </button>
+                </div>
+                <div className="h-[140px] overflow-hidden pointer-events-none opacity-80 scale-[0.98] origin-top-left" style={{ width: '102%' }}>
+                  {isPdfFile && node.fileData ? (
+                    <iframe src={node.fileData} className="w-full h-full border-0 pointer-events-none" title="pip" />
+                  ) : (
+                    <div className="p-2 text-xs text-[var(--text-secondary)] line-clamp-6">
+                      <MarkdownRenderer content={(node.content || '').slice(0, 300)} className="text-xs" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
           ) : (
             /* 白板 Tab：带边界感和空隙 */
             <div className="flex-1 overflow-hidden p-3">
@@ -839,8 +892,24 @@ export function FullScreenDetail() {
               title="拖拽调整宽度"
             />
 
-            {/* 侧栏顶部：仅保留收起按钮 */}
-            <div className="flex items-center justify-end px-3 py-2 border-b border-[var(--border)]">
+            {/* 侧栏顶部：加入笔记 + 收起按钮 */}
+            <div className="flex items-center justify-end gap-1.5 px-3 py-2 border-b border-[var(--border)]">
+              {aiMessages.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (!node || aiMessages.length === 0) return;
+                    const formatted = aiMessages.map(m =>
+                      m.role === 'user' ? `**我**：${m.content}` : `**AI**：${m.content}`
+                    ).join('\n\n');
+                    addNoteToNode(node.id, formatted, 'chat');
+                  }}
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md text-[var(--text-secondary)] hover:text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
+                  title="将整段对话加入笔记"
+                >
+                  <StickyNote size={12} />
+                  加入笔记
+                </button>
+              )}
               <button
                 onClick={() => setAiSidebarOpen(false)}
                 className="p-1 rounded-md text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
@@ -849,20 +918,6 @@ export function FullScreenDetail() {
                 <X size={14} />
               </button>
             </div>
-
-            {/* 自定义风格输入（选中"自定义"时显示） */}
-            {responseStyle === 'custom' && (
-              <div className="px-4 py-2 border-b border-[var(--border)] bg-[var(--bg-tertiary)]" style={{ animation: 'fadeIn 150ms ease-out' }}>
-                <p className="text-[10px] text-[var(--text-muted)] mb-1.5">用你自己的话描述想要的回答风格：</p>
-                <textarea
-                  value={customStyleDraft}
-                  onChange={(e) => { setCustomStyleDraft(e.target.value); setCustomStyle(e.target.value); }}
-                  placeholder="例如：像给朋友讲故事一样，多用比喻，语气轻松幽默…"
-                  rows={2}
-                  className="w-full resize-none bg-[var(--bg-primary)] border border-[var(--border)] rounded-md px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
-                />
-              </div>
-            )}
 
             {/* 当前节点上下文提示 */}
             <div className="px-4 py-1.5 bg-[var(--accent-soft)] border-b border-[var(--accent)]/20 flex items-center gap-2">
@@ -896,7 +951,7 @@ export function FullScreenDetail() {
                 </button>
                 {styleDropdownOpen && (
                   <div className="absolute right-0 top-full mt-1 w-40 py-1 rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] shadow-xl z-50"
-                    style={{ animation: 'fadeIn 120ms ease-out' }}>
+                    style={{ animation: 'dropdownIn 150ms ease-out' }}>
                     {AI_STYLES.map(style => (
                       <button
                         key={style.value}
@@ -930,7 +985,7 @@ export function FullScreenDetail() {
                 </button>
                 {modeDropdownOpen && (
                   <div className="absolute right-0 top-full mt-1 w-28 py-1 rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] shadow-xl z-50"
-                    style={{ animation: 'fadeIn 120ms ease-out' }}>
+                    style={{ animation: 'dropdownIn 150ms ease-out' }}>
                     {AI_MODES.map(mode => (
                       <button
                         key={mode.value}

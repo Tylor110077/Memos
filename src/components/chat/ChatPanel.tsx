@@ -160,7 +160,7 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
       // 追加到最后一条笔记末尾
       const lastNote = notes[notes.length - 1];
       const updatedNotes = notes.map(n =>
-        n.id === lastNote.id ? { ...n, content: n.content + '\n' + selectionPopup.text } : n
+        n.id === lastNote.id ? { ...n, content: (n.content ? n.content + '\n\n' : '') + selectionPopup.text } : n
       );
       useGraphStore.getState().updateNode(selectedNodeId, { notes: updatedNotes });
     }
