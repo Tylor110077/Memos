@@ -1,4 +1,4 @@
-# Memos v0.2.0 Tasks — Obsidian 兼容文件系统导出与文件树视图
+# Memos v0.0.11 Tasks — Obsidian 兼容文件系统导出与文件树视图
 
 ## 任务依赖图
 

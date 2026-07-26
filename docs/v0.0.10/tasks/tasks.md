@@ -1,4 +1,4 @@
-# Memos v0.1.0 Tasks
+# Memos v0.0.10 Tasks
 
 ## Phase 1：消息操作 + 对话栏快捷键 + UI 修复
 
