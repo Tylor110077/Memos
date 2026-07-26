@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 
+export type SelectionTool = 'none' | 'box' | 'click';
+export type ViewMode = 'canvas' | 'filetree';
+
 interface UIState {
   nodeDetailOpen: boolean;
   nodeDetailId: string | null;
@@ -8,6 +11,10 @@ interface UIState {
   fullScreenNodeId: string | null;
   focusMode: boolean;
   focusDegree: number;
+  /** 当前激活的圈选工具 */
+  selectionTool: SelectionTool;
+  /** 主视图模式：画布 / 文件树 */
+  viewMode: ViewMode;
 
   openNodeDetail: (nodeId: string) => void;
   closeNodeDetail: () => void;
@@ -19,6 +26,8 @@ interface UIState {
   closeFullScreen: () => void;
   setFocusMode: (enabled: boolean) => void;
   setFocusDegree: (degree: number) => void;
+  setSelectionTool: (tool: SelectionTool) => void;
+  setViewMode: (mode: ViewMode) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -29,6 +38,8 @@ export const useUIStore = create<UIState>((set) => ({
   fullScreenNodeId: null,
   focusMode: false,
   focusDegree: 2,
+  selectionTool: 'none',
+  viewMode: 'canvas',
 
   openNodeDetail: (nodeId) => set({ nodeDetailOpen: true, nodeDetailId: nodeId }),
   closeNodeDetail: () => set({ nodeDetailOpen: false, nodeDetailId: null }),
@@ -40,4 +51,6 @@ export const useUIStore = create<UIState>((set) => ({
   closeFullScreen: () => set({ fullScreenNodeId: null }),
   setFocusMode: (enabled) => set({ focusMode: enabled }),
   setFocusDegree: (degree) => set({ focusDegree: degree }),
+  setSelectionTool: (tool) => set((state) => ({ selectionTool: state.selectionTool === tool ? 'none' : tool })),
+  setViewMode: (mode) => set({ viewMode: mode }),
 }));

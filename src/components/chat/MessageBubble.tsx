@@ -23,7 +23,7 @@ export default function MessageBubble({ message, selected = false, onSelectChang
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState('');
-  const { nodes, applyGraphChanges, addNode, addNoteToNode, selectedNodeId } = useGraphStore();
+  const { nodes, edges, applyGraphChanges, addNode, addNoteToNode, selectedNodeId } = useGraphStore();
   const { currentBoardId } = useBoardStore();
 
   // 用户消息：直接将自己的话作为"理解"节点加入图谱
@@ -54,9 +54,10 @@ export default function MessageBubble({ message, selected = false, onSelectChang
       const changes = await parseConversationToGraph(
         [{ role: 'assistant', content: typeof message.content === 'string' ? message.content : '' }],
         nodes,
-        currentBoardId!
+        currentBoardId!,
+        edges
       );
-      if (changes && changes.newNodes.length > 0) {
+      if (changes && (changes.newEdges.length > 0 || changes.updatedNodes.length > 0)) {
         applyGraphChanges(changes);
         setGenerated(true);
       }

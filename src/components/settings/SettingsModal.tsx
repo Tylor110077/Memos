@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Settings, X, Sparkles, RotateCcw, Check, MessageSquareText, Keyboard, Key, Eye, EyeOff, Palette } from 'lucide-react';
+import { Settings, X, Sparkles, RotateCcw, Check, MessageSquareText, Keyboard, Key, Eye, EyeOff, Palette, Highlighter, FolderTree } from 'lucide-react';
 import { useSettingsStore, DEFAULT_NODE_COLORS } from '@/stores/settingsStore';
 import { themes, applyTheme, getSavedTheme } from '@/lib/themes';
 import { formatShortcut } from '@/hooks/useShortcuts';
@@ -64,7 +64,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 }
 
 export function SettingsModal({ visible, onClose }: SettingsModalProps) {
-  const { autoRecommend, setAutoRecommend, resetSettings, responseStyle, setResponseStyle, customStyle, setCustomStyle, shortcuts, setShortcut, apiKey, setApiKey, autoCognitionEval, setAutoCognitionEval, nodeColors, setNodeColor } = useSettingsStore();
+  const { autoRecommend, setAutoRecommend, resetSettings, responseStyle, setResponseStyle, customStyle, setCustomStyle, shortcuts, setShortcut, apiKey, setApiKey, autoCognitionEval, setAutoCognitionEval, defaultSelectionOpen, setDefaultSelectionOpen, autoSync, setAutoSync, nodeColors, setNodeColor } = useSettingsStore();
   const [currentTheme, setCurrentTheme] = useState('abyss');
   const [apiKeyDraft, setApiKeyDraft] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
@@ -229,6 +229,38 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
                 </div>
               </div>
               <Toggle checked={autoCognitionEval} onChange={setAutoCognitionEval} />
+            </div>
+
+            {/* 默认开启圈选 */}
+            <div className="flex items-start justify-between gap-4 p-4 rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] mt-3">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-[var(--accent-soft)] flex items-center justify-center shrink-0 mt-0.5">
+                  <Highlighter size={15} className="text-[var(--accent)]" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-[var(--text-primary)]">默认开启圈选</p>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
+                    开启后，对话区域的圈选模式将默认激活，无需每次手动点击。
+                  </p>
+                </div>
+              </div>
+              <Toggle checked={defaultSelectionOpen} onChange={setDefaultSelectionOpen} />
+            </div>
+
+            {/* 自动同步 Vault */}
+            <div className="flex items-start justify-between gap-4 p-4 rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] mt-3">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-[var(--accent-soft)] flex items-center justify-center shrink-0 mt-0.5">
+                  <FolderTree size={15} className="text-[var(--accent)]" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-[var(--text-primary)]">自动同步 Vault</p>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
+                    开启后，节点变更将自动同步到已授权的导出目录（Obsidian 兼容格式）。
+                  </p>
+                </div>
+              </div>
+              <Toggle checked={autoSync} onChange={setAutoSync} />
             </div>
 
             {/* 回答风格 */}

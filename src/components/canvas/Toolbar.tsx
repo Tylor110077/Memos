@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Globe, Link2, Maximize, ZoomIn, ZoomOut, Dices, Download, FolderTree, Combine, Loader2, Settings } from 'lucide-react';
+import { Globe, Link2, Maximize, ZoomIn, ZoomOut, Dices, Download, FolderTree, Combine, Loader2, Settings, Square, MousePointerClick, Plus, FolderOutput } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
 import { nanoid } from 'nanoid';
 import { useUIStore } from '@/stores/uiStore';
@@ -10,6 +10,8 @@ import { useBoardStore } from '@/stores/boardStore';
 import type { KnowledgeNode, KnowledgeEdge } from '@/types';
 import { BreakthroughModal } from './BreakthroughModal';
 import { SettingsModal } from '@/components/settings/SettingsModal';
+import { exportService, isFileSystemAccessSupported } from '@/lib/export/ExportService';
+import { exportAsZip, needsZipFallback } from '@/lib/export/ZipFallback';
 
 interface ThemeResult {
   title: string;
@@ -38,13 +40,16 @@ function Tip({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 export function Toolbar({ selectedNodeIds }: ToolbarProps) {
-  const { zoomIn, zoomOut, fitView } = useReactFlow();
+  const { zoomIn, zoomOut, fitView, screenToFlowPosition } = useReactFlow();
   const openDomainModal = useUIStore((s) => s.openDomainModal);
   const openImportModal = useUIStore((s) => s.openImportModal);
+  const selectionTool = useUIStore((s) => s.selectionTool);
+  const setSelectionTool = useUIStore((s) => s.setSelectionTool);
   const currentBoardId = useBoardStore((s) => s.currentBoardId);
   const [breakthroughOpen, setBreakthroughOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [summarizing, setSummarizing] = useState<'all' | 'selected' | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const selectionCount = selectedNodeIds?.size ?? 0;
 
@@ -153,10 +158,64 @@ export function Toolbar({ selectedNodeIds }: ToolbarProps) {
 
   const buttonClass =
     'p-2.5 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 disabled:pointer-events-none min-w-[36px] min-h-[36px] flex items-center justify-center';
+  const activeToolClass = 'bg-[var(--accent-soft)] text-[var(--accent)] ring-1 ring-[var(--accent)]/50';
 
   return (
     <>
     <div className="absolute top-4 left-4 z-10 flex flex-col gap-1 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)]/80 backdrop-blur-sm p-1.5 shadow-lg">
+      {/* 圈选工具组 */}
+      <Tip label="框选工具：拖拽框选范围内的节点和边">
+        <button
+          onClick={() => setSelectionTool('box')}
+          className={`${buttonClass} ${selectionTool === 'box' ? activeToolClass : ''}`}
+        >
+          <Square size={18} />
+        </button>
+      </Tip>
+
+      <Tip label="点选工具：点击节点/边加入选区">
+        <button
+          onClick={() => setSelectionTool('click')}
+          className={`${buttonClass} ${selectionTool === 'click' ? activeToolClass : ''}`}
+        >
+          <MousePointerClick size={18} />
+        </button>
+      </Tip>
+
+      <div className="my-1 border-t border-[var(--border)]" />
+
+      <Tip label="添加空白节点">
+        <button
+          onClick={() => {
+            if (!currentBoardId) return;
+            const { nodes } = useGraphStore.getState();
+            // 放在视口中心附近 + 随机偏移
+            const center = screenToFlowPosition({
+              x: window.innerWidth / 2,
+              y: window.innerHeight / 2,
+            });
+            const now = new Date().toISOString();
+            useGraphStore.getState().addNode({
+              id: `node-${nanoid(8)}`,
+              boardId: currentBoardId,
+              type: 'concept',
+              title: '新节点',
+              content: '',
+              level: 2,
+              status: 'lit',
+              position: {
+                x: center.x + Math.floor(Math.random() * 80 - 40),
+                y: center.y + Math.floor(Math.random() * 80 - 40),
+              },
+              metadata: { createdAt: now, updatedAt: now },
+            });
+          }}
+          className={buttonClass}
+        >
+          <Plus size={18} />
+        </button>
+      </Tip>
+
       <Tip label="生成领域图谱">
         <button onClick={openDomainModal} className={buttonClass}>
           <Globe size={18} />
@@ -200,6 +259,37 @@ export function Toolbar({ selectedNodeIds }: ToolbarProps) {
       <Tip label="导出图谱为 JSON">
         <button onClick={handleExport} className={buttonClass}>
           <Download size={18} />
+        </button>
+      </Tip>
+
+      <Tip label={exportService.isReady ? '同步到 Vault' : '导出为 Obsidian Vault'}>
+        <button
+          onClick={async () => {
+            if (exporting) return;
+            setExporting(true);
+            try {
+              const { nodes, edges } = useGraphStore.getState();
+              const { boards } = useBoardStore.getState();
+              // ZIP fallback：不支持 File System Access API 时打包下载
+              if (needsZipFallback()) {
+                await exportAsZip(nodes, edges, boards);
+              } else {
+                if (!exportService.isReady) {
+                  const ok = await exportService.selectDirectory();
+                  if (!ok) return;
+                }
+                await exportService.exportAll(nodes, edges, boards);
+              }
+            } catch (e) {
+              console.error('导出失败:', e);
+            } finally {
+              setExporting(false);
+            }
+          }}
+          className={buttonClass}
+          disabled={exporting}
+        >
+          {exporting ? <Loader2 size={18} className="animate-spin" /> : <FolderOutput size={18} />}
         </button>
       </Tip>
 

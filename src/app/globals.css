@@ -118,6 +118,15 @@ body {
   box-shadow: none;
 }
 
+/* 禁止 React Flow 默认 .selected 样式干扰自定义节点 */
+.react-flow__node.selected {
+  box-shadow: none !important;
+}
+.react-flow__node.selected .react-flow__node-default {
+  border: none !important;
+  box-shadow: none !important;
+}
+
 /* T-440: 连线预览 — 细线 + 线段式前进动画 */
 .react-flow__edge[data-id="preview-edge"] path {
   animation: dashFlow 0.4s linear infinite;

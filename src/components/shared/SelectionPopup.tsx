@@ -20,10 +20,10 @@ interface SelectionPopupProps {
   noteDisabledHint?: string;
 }
 
-const MIN_W = 200;
-const MIN_H = 100;
-const MAX_W = 450;
-const MAX_H = 400;
+const MIN_W = 280;
+const MIN_H = 120;
+const MAX_W = 500;
+const MAX_H = 450;
 
 /** 可拖拽、可调大小、可滚动的圈选操作浮层 */
 export function SelectionPopup({
@@ -39,7 +39,7 @@ export function SelectionPopup({
   noteDisabledHint = '先选中一个节点',
 }: SelectionPopupProps) {
   const [pos, setPos] = useState({ x: initialX, y: initialY });
-  const [size, setSize] = useState({ w: 280, h: 160 });
+  const [size, setSize] = useState({ w: 340, h: 180 });
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [explanation, setExplanation] = useState<string | null>(null);

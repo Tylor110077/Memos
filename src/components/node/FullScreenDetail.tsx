@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, FileText, Loader2, Sparkles, MessageSquare, Send, ChevronDown, Split, Trash2, StickyNote, PenLine, Highlighter, Plus, Clock } from 'lucide-react';
+import { X, FileText, Loader2, Sparkles, MessageSquare, Send, ChevronDown, Split, Trash2, StickyNote, PenLine, Highlighter, Plus, Clock, Globe } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import dynamic from 'next/dynamic';
 import { useUIStore } from '@/stores/uiStore';
@@ -78,11 +78,14 @@ const SIDEBAR_MIN_WIDTH = 280;
 
 export function FullScreenDetail() {
   const { fullScreenNodeId, closeFullScreen } = useUIStore();
-  const { nodes, edges, updateNode, removeNode, applyGraphChanges, addNoteToNode } = useGraphStore();
+  const { nodes, edges, updateNode, removeNode, applyGraphChanges, addNoteToNode, setEvaluating } = useGraphStore();
   const { boards } = useBoardStore();
-  const { customStyle, responseStyle, setResponseStyle, apiKey, autoCognitionEval } = useSettingsStore();
+  const { customStyle, responseStyle, setResponseStyle, apiKey, autoCognitionEval, defaultSelectionOpen } = useSettingsStore();
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const titleInputRef = useRef<HTMLInputElement>(null);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
@@ -115,7 +118,8 @@ export function FullScreenDetail() {
   const styleDropdownRef = useRef<HTMLDivElement>(null);
 
   // ===== AI 侧栏圈选加入笔记 =====
-  const [aiSelectionMode, setAiSelectionMode] = useState(false);
+  const [aiSelectionMode, setAiSelectionMode] = useState(defaultSelectionOpen);
+  const [aiWebSearch, setAiWebSearch] = useState(true);
   const [aiSelectionPopup, setAiSelectionPopup] = useState<{ text: string; x: number; y: number } | null>(null);
   const [showAiHistory, setShowAiHistory] = useState(false);
 
@@ -156,7 +160,7 @@ export function FullScreenDetail() {
     return () => window.removeEventListener('studyboard:toggle-chat', handler);
   }, []);
 
-  // 初始化编辑内容和摘要
+  // 初始化编辑内容和摘要（仅在切换节点时重置，避免 notes 更新导致 iframe 重载）
   useEffect(() => {
     if (node) {
       setEditContent(node.content);
@@ -164,7 +168,8 @@ export function FullScreenDetail() {
       setIsEditing(false);
       setIframeLoading(true);
     }
-  }, [node]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [node?.id]);
 
   // 切换节点时：保存旧节点对话 + 加载新节点对话
   useEffect(() => {
@@ -194,14 +199,18 @@ export function FullScreenDetail() {
       const newNode = nodes.find(n => n.id === newId);
       const lastConv = newNode?.aiConversations?.[newNode.aiConversations.length - 1];
       if (lastConv && lastConv.messages.length > 0) {
-        setAiMessages(lastConv.messages.map(m => ({ ...m, id: nanoid(), role: m.role as 'user' | 'assistant' })));
+        const loaded = lastConv.messages.map(m => ({ ...m, id: nanoid(), role: m.role as 'user' | 'assistant' }));
+        setAiMessages(loaded);
+        lastEvalMsgCountRef.current = loaded.length; // 同步基准，避免误触发评审
         aiConvIdRef.current = lastConv.id;
       } else {
         setAiMessages([]);
+        lastEvalMsgCountRef.current = 0;
         aiConvIdRef.current = nanoid();
       }
     } else {
       setAiMessages([]);
+      lastEvalMsgCountRef.current = 0;
       aiConvIdRef.current = null;
     }
 
@@ -473,6 +482,7 @@ export function FullScreenDetail() {
           style: responseStyle,
           customStyleText: responseStyle === 'custom' ? customStyle : undefined,
           apiKey: apiKey || undefined,
+          webSearch: aiWebSearch,
           // 注入当前节点上下文，/api/chat 会将其拼入 system prompt
           context: { selectedNode: { title: node.title, content: node.content } },
         }),
@@ -548,6 +558,7 @@ export function FullScreenDetail() {
   // 认知评审触发函数（复用）
   const triggerCognitionEval = (msgs: ChatMessage[]) => {
     if (!node) return;
+    setEvaluating(node.id, true);
     fetch('/api/evaluate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -562,7 +573,9 @@ export function FullScreenDetail() {
         const history = [...(node.cognitionHistory || []), { level: data.level, evaluatedAt: new Date().toISOString(), conversationLength: msgs.length }];
         updateNode(node.id, { cognitionLevel: data.level, cognitionReason: data.reason, cognitionHistory: history });
       }
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => {
+      if (node) setEvaluating(node.id, false);
+    });
   };
 
   if (!fullScreenNodeId || !node) return null;
@@ -594,7 +607,33 @@ export function FullScreenDetail() {
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
             <div className="max-w-3xl mx-auto w-full flex items-center gap-3 min-w-0">
-              <h2 className="text-lg font-semibold text-[var(--text-primary)] truncate">{node.title}</h2>
+              {isEditingTitle ? (
+                <input
+                  ref={titleInputRef}
+                  className="text-lg font-semibold text-[var(--text-primary)] bg-[var(--bg-primary)] border border-[var(--accent)] rounded-md px-2 py-1 outline-none min-w-[120px] max-w-[400px] flex-1"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  onBlur={() => {
+                    const trimmed = editTitle.trim();
+                    if (trimmed && trimmed !== node.title) updateNode(node.id, { title: trimmed });
+                    else setEditTitle(node.title);
+                    setIsEditingTitle(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+                    if (e.key === 'Escape') { setEditTitle(node.title); setIsEditingTitle(false); }
+                  }}
+                  autoFocus
+                />
+              ) : (
+                <h2
+                  className="text-lg font-semibold text-[var(--text-primary)] truncate cursor-text hover:text-[var(--accent)] transition-colors"
+                  onClick={() => { setEditTitle(node.title); setIsEditingTitle(true); }}
+                  title="点击编辑标题"
+                >
+                  {node.title}
+                </h2>
+              )}
               <span className="shrink-0 text-xs px-2 py-0.5 rounded-full bg-[var(--bg-hover)] text-[var(--text-secondary)]">{{ concept: '概念', theme: '主题', material: '材料', understanding: '理解', question: '问题' }[node.type] || node.type}</span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -1081,7 +1120,7 @@ export function FullScreenDetail() {
               )}
             </div>
 
-            {/* 控制栏：圈选 / 风格 / 模式，右对齐 */}
+            {/* 控制栏：圈选 / 联网 / 风格 / 模式，右对齐 */}
             <div className="flex items-center justify-end gap-1.5 px-3 py-2 border-b border-[var(--border)]">
               <button
                 onClick={() => { setAiSelectionMode(v => !v); setAiSelectionPopup(null); }}
@@ -1094,6 +1133,18 @@ export function FullScreenDetail() {
               >
                 <Highlighter size={12} />
                 圈选
+              </button>
+              <button
+                onClick={() => setAiWebSearch(v => !v)}
+                className={`flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-md border transition-colors ${
+                  aiWebSearch
+                    ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
+                    : 'border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]'
+                }`}
+                title="联网搜索"
+              >
+                <Globe size={12} />
+                联网
               </button>
               {/* 回答风格 */}
               <div className="relative" ref={styleDropdownRef}>

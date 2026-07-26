@@ -24,6 +24,10 @@ export interface MemosSettings {
   apiKey: string;
   /** 费曼对话结束后自动触发认知评审 */
   autoCognitionEval: boolean;
+  /** 圈选模式默认开启 */
+  defaultSelectionOpen: boolean;
+  /** 自动同步到 Vault */
+  autoSync: boolean;
   /** 节点类型颜色配置 */
   nodeColors: Record<string, string>;
 }
@@ -45,6 +49,8 @@ const DEFAULT_SETTINGS: MemosSettings = {
   shortcuts: { ...DEFAULT_SHORTCUTS },
   apiKey: '',
   autoCognitionEval: true,
+  defaultSelectionOpen: false,
+  autoSync: false,
   nodeColors: { ...DEFAULT_NODE_COLORS },
 };
 
@@ -77,6 +83,8 @@ function persist(next: MemosSettings) {
       shortcuts: next.shortcuts,
       apiKey: next.apiKey,
       autoCognitionEval: next.autoCognitionEval,
+      defaultSelectionOpen: next.defaultSelectionOpen,
+      autoSync: next.autoSync,
       nodeColors: next.nodeColors,
     }));
   } catch {
@@ -93,6 +101,8 @@ interface SettingsState extends MemosSettings {
   setShortcut: (action: string, key: string) => void;
   setApiKey: (key: string) => void;
   setAutoCognitionEval: (value: boolean) => void;
+  setDefaultSelectionOpen: (value: boolean) => void;
+  setAutoSync: (value: boolean) => void;
   setNodeColor: (type: string, color: string) => void;
   resetSettings: () => void;
   /** 客户端挂载后调用，从 localStorage 加载用户设置 */
@@ -150,6 +160,20 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       const next = { ...state, autoCognitionEval: value };
       persist(next);
       return { autoCognitionEval: value };
+    }),
+
+  setDefaultSelectionOpen: (value) =>
+    set((state) => {
+      const next = { ...state, defaultSelectionOpen: value };
+      persist(next);
+      return { defaultSelectionOpen: value };
+    }),
+
+  setAutoSync: (value) =>
+    set((state) => {
+      const next = { ...state, autoSync: value };
+      persist(next);
+      return { autoSync: value };
     }),
 
   setNodeColor: (type, color) =>

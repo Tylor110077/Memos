@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { nanoid } from 'nanoid';
-import { Layers, ChevronDown, Highlighter } from 'lucide-react';
+import { Layers, ChevronDown, Highlighter, Globe } from 'lucide-react';
 import { useGraphStore } from '@/stores/graphStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useBoardStore } from '@/stores/boardStore';
@@ -36,29 +36,45 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
   const currentConvIdRef = useRef<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingConsumedRef = useRef<string | null>(null); // 防止 pendingMessage 被重复消费（发送两遍）
-  const { nodes, applyGraphChanges, selectedNodeId, addNoteToNode } = useGraphStore();
+  const { nodes, edges, applyGraphChanges, selectedNodeId, addNoteToNode } = useGraphStore();
   const selectedNode = nodes.find(n => n.id === selectedNodeId);
   const { pendingMessage, setPendingMessage, resetSignal, pendingConversation, setPendingConversation } = useChatStore();
   const { currentBoardId, boards } = useBoardStore();
-  const { responseStyle, setResponseStyle, customStyle, apiKey } = useSettingsStore();
+  const { responseStyle, setResponseStyle, customStyle, apiKey, defaultSelectionOpen } = useSettingsStore();
   const [styleDropdownOpen, setStyleDropdownOpen] = useState(false);
-  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(defaultSelectionOpen);
+  const [webSearch, setWebSearch] = useState(true);
+  const [webSearchStatus, setWebSearchStatus] = useState<'searching' | { sources: number } | null>(null);
   const [selectionPopup, setSelectionPopup] = useState<{ text: string; x: number; y: number } | null>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
 
-  const { messages, append, setMessages, status } = useChat({
+  const { messages, append, setMessages, status, data } = useChat({
     api: '/api/chat',
     body: {
       mode,
       style: responseStyle,
       customStyleText: responseStyle === 'custom' ? customStyle : undefined,
       apiKey: apiKey || undefined,
+      webSearch,
       context: {
         currentNodeTitle: selectedNode?.title || currentNodeTitle,
         selectedNode: selectedNode ? { title: selectedNode.title, content: selectedNode.content } : undefined,
       },
     },
   });
+
+  // 监听联网搜索数据事件
+  useEffect(() => {
+    if (!data || data.length === 0) return;
+    const lastData = data[data.length - 1] as any;
+    if (lastData?.type === 'web-search') {
+      if (lastData.status === 'searching') {
+        setWebSearchStatus('searching');
+      } else if (lastData.status === 'done') {
+        setWebSearchStatus({ sources: lastData.sources || 0 });
+      }
+    }
+  }, [data]);
 
   // 对话持久化：messages 变化时 debounce 1秒后保存
   useEffect(() => {
@@ -189,8 +205,8 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
                   const selectedContent = messages
                     .filter((_, idx) => selectedMessages.has(idx))
                     .map((m) => ({ role: m.role, content: typeof m.content === 'string' ? m.content : '' }));
-                  const changes = await parseConversationToGraph(selectedContent, nodes, currentBoardId!);
-                  if (changes && changes.newNodes.length > 0) {
+                  const changes = await parseConversationToGraph(selectedContent, nodes, currentBoardId!, edges);
+                  if (changes && (changes.newEdges.length > 0 || changes.updatedNodes.length > 0)) {
                     applyGraphChanges(changes);
                   }
                   setSelectedMessages(new Set());
@@ -216,7 +232,7 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
         </div>
       )}
 
-      {/* 回答风格选择器 + 圈选开关（圈选仅在选中节点时显示） */}
+      {/* 回答风格选择器 + 圈选开关 + 联网搜索开关 */}
       <div className="relative px-4 pt-2 flex justify-end items-center gap-2">
         {selectedNode && (
           <button
@@ -232,6 +248,18 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
             圈选
           </button>
         )}
+        <button
+          onClick={() => setWebSearch(v => !v)}
+          className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border transition-colors ${
+            webSearch
+              ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
+              : 'border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]'
+          }`}
+          title="联网搜索"
+        >
+          <Globe size={12} />
+          联网
+        </button>
         <button
           onClick={() => setStyleDropdownOpen(open => !open)}
           className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors"
@@ -266,6 +294,7 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
         <MessageList
           messages={messages}
           selectedMessages={selectedMessages}
+          webSearchStatus={webSearchStatus}
           onSelectChange={(index, checked) => {
             setSelectedMessages((prev) => {
               const next = new Set(prev);
@@ -326,6 +355,7 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
       {/* Input */}
       <ChatInput
         onSend={(message) => {
+          if (webSearch) setWebSearchStatus('searching');
           append({ role: 'user', content: message });
         }}
         disabled={isLoading}

@@ -1,9 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
+import { useState, useRef, useEffect } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { FileTypeIcon } from '@/components/shared/FileTypeIcon';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useGraphStore } from '@/stores/graphStore';
 
 // 各节点类型对应的颜色（从 CSS 变量读取）
 const TYPE_COLORS: Record<string, string> = {
@@ -30,6 +32,7 @@ const COGNITION_COLORS: Record<number, string> = {
 export function DotNode({ data, selected }: NodeProps) {
   const node = data as Record<string, any>;
   const nodeColors = useSettingsStore((s) => s.nodeColors);
+  const isEvaluating = useGraphStore((s) => s.evaluatingNodeIds.has(node.id as string));
   const isDimmed: boolean = node.isDimmed ?? false;
   const isHovered: boolean = node.isHovered ?? false;
   const isMultiSelected: boolean = node.isMultiSelected ?? false;
@@ -40,6 +43,47 @@ export function DotNode({ data, selected }: NodeProps) {
   const materialType: string | undefined = node.metadata?.materialType;
   const fileName: string | undefined = node.metadata?.source;
   const cognitionLevel: number | undefined = node.cognitionLevel;
+
+  // 内联编辑标题：仅在节点刚创建时（2秒内）自动进入编辑模式
+  const isJustCreated = (() => {
+    const createdAt = node.metadata?.createdAt;
+    if (!createdAt) return false;
+    return Date.now() - new Date(createdAt).getTime() < 2000;
+  })();
+  const [isEditingTitle, setIsEditingTitle] = useState(isJustCreated && title === '新节点');
+  const [editTitle, setEditTitle] = useState(title);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditingTitle && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditingTitle]);
+
+  // 点击 input 外部时自动提交编辑（使用 capture 阶段，绕过 React Flow 事件拦截）
+  useEffect(() => {
+    if (!isEditingTitle) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      if (inputRef.current && !inputRef.current.contains(e.target as Node)) {
+        commitTitle();
+      }
+    };
+    // 延迟绑定，避免创建时的 mousedown 事件立即触发
+    const timer = setTimeout(() => document.addEventListener('mousedown', handleMouseDown, true), 100);
+    return () => { clearTimeout(timer); document.removeEventListener('mousedown', handleMouseDown, true); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditingTitle, editTitle]);
+
+  const commitTitle = () => {
+    const trimmed = editTitle.trim();
+    if (trimmed && trimmed !== title) {
+      useGraphStore.getState().updateNode(node.id as string, { title: trimmed });
+    } else if (!trimmed) {
+      setEditTitle(title); // 空标题回退
+    }
+    setIsEditingTitle(false);
+  };
 
   // 大小：level 越低（越重要）越大
   const size = level === 0 ? 14 : level === 1 ? 11 : level === 2 ? 9 : 7;
@@ -113,12 +157,57 @@ export function DotNode({ data, selected }: NodeProps) {
       )}
 
       {/* 文字标签（绝对定位，不影响节点尺寸） */}
-      <span
-        className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[10px] leading-tight text-center max-w-[80px] truncate transition-colors duration-150 select-none whitespace-nowrap"
-        style={{ color: isHovered || selected ? 'var(--text-primary)' : 'var(--text-muted)' }}
-      >
-        {title}
-      </span>
+      {isEditingTitle ? (
+        <input
+          ref={inputRef}
+          className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[10px] leading-tight text-center w-[80px] bg-[var(--bg-primary)] border border-[var(--accent)] rounded px-1 py-0.5 text-[var(--text-primary)] outline-none z-20"
+          value={editTitle}
+          onChange={(e) => setEditTitle(e.target.value)}
+          onBlur={commitTitle}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); commitTitle(); }
+            if (e.key === 'Escape') { setEditTitle(title); setIsEditingTitle(false); }
+            e.stopPropagation();
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <span
+          className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[10px] leading-tight text-center max-w-[80px] truncate transition-colors duration-150 select-none whitespace-nowrap cursor-text"
+          style={{ color: isHovered || selected ? 'var(--text-primary)' : 'var(--text-muted)' }}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            setEditTitle(title);
+            setIsEditingTitle(true);
+          }}
+        >
+          {title}
+        </span>
+      )}
+
+      {/* 认知评审等待动画：围绕节点旋转的圆环 */}
+      {isEvaluating && (
+        <svg
+          className="absolute animate-spin"
+          width={size + 14}
+          height={size + 14}
+          viewBox={`0 0 ${size + 14} ${size + 14}`}
+          style={{ top: -(size + 14) / 2 + size / 2, left: -(size + 14) / 2 + size / 2, animationDuration: '1.2s' }}
+        >
+          <circle
+            cx={(size + 14) / 2}
+            cy={(size + 14) / 2}
+            r={(size + 12) / 2}
+            fill="none"
+            stroke="var(--accent)"
+            strokeWidth="1.5"
+            strokeDasharray={`${Math.PI * (size + 12) * 0.3} ${Math.PI * (size + 12) * 0.7}`}
+            strokeLinecap="round"
+            opacity="0.85"
+          />
+        </svg>
+      )}
     </div>
   );
 }

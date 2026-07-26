@@ -14,6 +14,7 @@ import {
   type OnEdgesChange,
   type OnConnect,
   type NodeMouseHandler,
+  type OnSelectionChangeParams,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { nanoid } from 'nanoid';
@@ -33,6 +34,8 @@ function CanvasInner() {
   const { nodes: storeNodes, edges: storeEdges, selectedNodeId, selectedEdgeId } = useGraphStore();
   const { updateNodePosition, selectNode, selectEdge, addEdge, removeEdge, removeNode } = useGraphStore();
   const { openFullScreen, openNodeDetail } = useUIStore();
+  const selectionTool = useUIStore((s) => s.selectionTool);
+  const setSelectionTool = useUIStore((s) => s.setSelectionTool);
   const { currentBoardId } = useBoardStore();
   const reactFlowInstance = useReactFlow();
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
@@ -82,7 +85,7 @@ function CanvasInner() {
             isHovered: n.id === hoveredNodeId,
             isMultiSelected: multiSelectedIds.has(n.id),
           } as unknown as Record<string, unknown>,
-          selected: n.id === selectedNodeId,
+          selected: n.id === selectedNodeId || multiSelectedIds.has(n.id),
         };
       }),
     [storeNodes, selectedNodeId, highlightedIds, hoveredNodeId, multiSelectedIds],
@@ -212,6 +215,16 @@ function CanvasInner() {
   );
 
   const onNodeClick: NodeMouseHandler = useCallback((event, node) => {
+    // 点选工具模式：点击即 toggle 多选，无需 Shift
+    if (selectionTool === 'click') {
+      setMultiSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(node.id)) next.delete(node.id);
+        else next.add(node.id);
+        return next;
+      });
+      return;
+    }
     // Shift+Click：toggle 多选（T-421）
     if (event.shiftKey) {
       setMultiSelectedIds((prev) => {
@@ -227,7 +240,7 @@ function CanvasInner() {
     }
     selectNode(node.id);
     openNodeDetail(node.id);
-  }, [selectNode, openNodeDetail]);
+  }, [selectNode, openNodeDetail, selectionTool]);
   const onNodeDoubleClick: NodeMouseHandler = useCallback((_, node) => { openFullScreen(node.id); }, [openFullScreen]);
   const onNodeMouseEnter: NodeMouseHandler = useCallback((_, node) => {
     if (isDraggingRef.current) return;
@@ -240,8 +253,29 @@ function CanvasInner() {
     // 延迟 50ms 清除，如果 50ms 内进入了另一个节点则不会闪烁
     hoverClearTimeout.current = setTimeout(() => setHoveredNodeId(null), 50);
   }, []);
-  const onEdgeClick = useCallback((_: any, edge: Edge) => { selectEdge(edge.id); }, [selectEdge]);
-  const onPaneClick = useCallback(() => { selectNode(null); setMultiSelectedIds(new Set()); }, [selectNode]);
+  const onEdgeClick = useCallback((_: any, edge: Edge) => {
+    // 点选工具模式：点击边也加入多选
+    if (selectionTool === 'click') {
+      // 边没有 multiSelected 状态，但可以通过 selectEdge 高亮
+      selectEdge(edge.id);
+      return;
+    }
+    selectEdge(edge.id);
+  }, [selectEdge, selectionTool]);
+  const onPaneClick = useCallback(() => {
+    selectNode(null);
+    setMultiSelectedIds(new Set());
+    // 点击空白处退出圈选工具
+    if (selectionTool !== 'none') setSelectionTool('none');
+  }, [selectNode, selectionTool, setSelectionTool]);
+
+  // 框选工具：React Flow 原生 selection 变化时同步到 multiSelectedIds
+  const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
+    if (selectionTool === 'box') {
+      const ids = new Set(params.nodes.map(n => n.id));
+      setMultiSelectedIds(ids);
+    }
+  }, [selectionTool]);
 
   // Delete/Backspace：删除 Shift 多选的节点（一键删除），或删除选中的边（T-441）
   useEffect(() => {
@@ -307,13 +341,16 @@ function CanvasInner() {
         onNodeMouseLeave={onNodeMouseLeave}
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
+        onSelectionChange={onSelectionChange}
         fitView
         zoomOnDoubleClick={false}
-        panOnDrag={true}
+        panOnDrag={selectionTool === 'box' ? [1, 2] : true}
         panOnScroll={false}
-        selectionOnDrag={false}
+        selectionOnDrag={selectionTool === 'box'}
+        selectionKeyCode={null}
         deleteKeyCode={['Backspace', 'Delete']}
         proOptions={{ hideAttribution: true }}
+        style={selectionTool !== 'none' ? { cursor: selectionTool === 'box' ? 'crosshair' : 'pointer' } : undefined}
       >
         <Background variant={BackgroundVariant.Lines} gap={36} size={1} color="rgba(255,255,255,0.045)" />
       </ReactFlow>

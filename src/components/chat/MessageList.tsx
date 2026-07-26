@@ -2,17 +2,19 @@
 
 import { useEffect, useRef } from 'react';
 import type { Message } from 'ai';
+import { Globe, Loader2 } from 'lucide-react';
 import MessageBubble from './MessageBubble';
 import { Logo } from '@/components/Logo';
 
 interface MessageListProps {
   messages: Message[];
   selectedMessages?: Set<number>;
+  webSearchStatus?: 'searching' | { sources: number } | null;
   onSelectChange?: (index: number, checked: boolean) => void;
   onEditMessage?: (id: string, newContent: string) => void;
 }
 
-export default function MessageList({ messages, selectedMessages, onSelectChange, onEditMessage }: MessageListProps) {
+export default function MessageList({ messages, selectedMessages, webSearchStatus, onSelectChange, onEditMessage }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,6 +56,22 @@ export default function MessageList({ messages, selectedMessages, onSelectChange
           onEditMessage={onEditMessage}
         />
       ))}
+      {/* 联网搜索状态指示器 */}
+      {webSearchStatus === 'searching' && (
+        <div className="flex items-center gap-2 px-3 py-2 mt-1 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border)] w-fit"
+          style={{ animation: 'fadeIn 200ms ease-out' }}>
+          <Loader2 size={12} className="animate-spin text-[var(--accent)]" />
+          <Globe size={12} className="text-[var(--accent)]" />
+          <span className="text-[11px] text-[var(--text-secondary)]">正在联网搜索...</span>
+        </div>
+      )}
+      {webSearchStatus && typeof webSearchStatus === 'object' && webSearchStatus.sources > 0 && (
+        <div className="flex items-center gap-1.5 px-2.5 py-1 mt-1 rounded-md bg-[var(--accent-soft)] w-fit"
+          style={{ animation: 'fadeIn 200ms ease-out' }}>
+          <Globe size={11} className="text-[var(--accent)]" />
+          <span className="text-[10px] text-[var(--accent)] font-medium">已搜索 {webSearchStatus.sources} 个来源</span>
+        </div>
+      )}
       <div ref={bottomRef} />
     </div>
   );

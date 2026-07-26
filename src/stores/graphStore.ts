@@ -9,6 +9,9 @@ interface GraphState {
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
   isInitialized: boolean;
+  /** 正在被认知评审的节点 ID 集合 */
+  evaluatingNodeIds: Set<string>;
+  setEvaluating: (nodeId: string, evaluating: boolean) => void;
 
   initializeGraph: (boardId: string) => Promise<void>;
   addNode: (node: KnowledgeNode) => void;
@@ -29,6 +32,15 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   selectedNodeId: null,
   selectedEdgeId: null,
   isInitialized: false,
+  evaluatingNodeIds: new Set(),
+
+  setEvaluating: (nodeId, evaluating) =>
+    set((state) => {
+      const next = new Set(state.evaluatingNodeIds);
+      if (evaluating) next.add(nodeId);
+      else next.delete(nodeId);
+      return { evaluatingNodeIds: next };
+    }),
 
   initializeGraph: async (boardId: string) => {
     const [nodes, edges] = await Promise.all([

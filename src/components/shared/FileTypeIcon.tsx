@@ -43,7 +43,7 @@ export function FileTypeIcon({ type, fileName, size = 24, className = '' }: File
 
   return (
     <div
-      className={`inline-flex items-center justify-center rounded-md font-bold shrink-0 ${className}`}
+      className={`inline-flex items-center justify-center rounded-full font-bold shrink-0 ${className}`}
       style={{
         width: size,
         height: size,
