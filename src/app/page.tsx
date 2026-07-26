@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Network, FolderTree } from 'lucide-react';
 import { DomainModal } from '@/components/domain/DomainModal';
@@ -14,6 +14,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useShortcuts } from '@/hooks/useShortcuts';
 import { FileTreeView } from '@/components/filetree/FileTreeView';
+import { exportService } from '@/lib/export/ExportService';
 
 // React Flow 不支持 SSR，需要动态导入
 const Canvas = dynamic(
@@ -55,6 +56,8 @@ export default function Home() {
   // 客户端挂载后从 localStorage 水合设置（避免 SSR hydration mismatch）
   useEffect(() => {
     useSettingsStore.getState().hydrate();
+    // 尝试恢复之前授权的导出目录 Handle
+    exportService.restoreHandle();
   }, []);
 
   // 初始化画板
@@ -68,6 +71,26 @@ export default function Home() {
       initializeGraph(currentBoardId);
     }
   }, [boardsReady, currentBoardId, initializeGraph]);
+
+  // 自动同步 Vault：监听节点变更，debounce 2s 后增量导出
+  const autoSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nodes = useGraphStore(s => s.nodes);
+  useEffect(() => {
+    const { autoSync } = useSettingsStore.getState();
+    if (!autoSync || !exportService.isReady) return;
+    if (autoSyncTimerRef.current) clearTimeout(autoSyncTimerRef.current);
+    autoSyncTimerRef.current = setTimeout(async () => {
+      try {
+        const { nodes: allNodes, edges } = useGraphStore.getState();
+        const { boards } = useBoardStore.getState();
+        const changedIds = exportService.getChangedNodeIds(allNodes);
+        if (changedIds.size > 0) {
+          await exportService.exportIncremental(allNodes, edges, boards, changedIds);
+        }
+      } catch { /* ignore sync errors */ }
+    }, 2000);
+    return () => { if (autoSyncTimerRef.current) clearTimeout(autoSyncTimerRef.current); };
+  }, [nodes]);
 
   return (
     <div className="h-screen w-screen flex overflow-hidden bg-[var(--bg-primary)]">
