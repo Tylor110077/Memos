@@ -91,6 +91,16 @@ export interface ChatMessage {
   timestamp: string;
 }
 
+// ===== 对话分段 =====
+export interface ChatSegment {
+  id: string;
+  name: string;
+  startMsgIndex: number;
+  endMsgIndex: number;
+  collapsed: boolean;
+  createdAt: string;
+}
+
 // ===== 领域图谱 =====
 export interface DomainGraph {
   id: string;

@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { Handle, Position, useViewport, type NodeProps } from '@xyflow/react';
 import { FileTypeIcon } from '@/components/shared/FileTypeIcon';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useGraphStore } from '@/stores/graphStore';
@@ -33,6 +33,12 @@ export function DotNode({ data, selected }: NodeProps) {
   const node = data as Record<string, any>;
   const nodeColors = useSettingsStore((s) => s.nodeColors);
   const isEvaluating = useGraphStore((s) => s.evaluatingNodeIds.has(node.id as string));
+  const { zoom } = useViewport();
+
+  // 缩放感知：zoom 越大文字越清晰，越小越模糊/透明（模仿 Obsidian）
+  // zoom < 0.6: 完全隐藏标签; 0.6~1.2: 渐显+模糊; > 1.2: 完全清晰
+  const labelOpacity = zoom < 0.6 ? 0 : zoom < 1.2 ? Math.min(1, (zoom - 0.6) / 0.6) : 1;
+  const labelBlur = zoom < 0.8 ? 3 : zoom < 1.2 ? Math.max(0, (1.2 - zoom) * 5) : 0;
   const isDimmed: boolean = node.isDimmed ?? false;
   const isHovered: boolean = node.isHovered ?? false;
   const isMultiSelected: boolean = node.isMultiSelected ?? false;
@@ -156,7 +162,7 @@ export function DotNode({ data, selected }: NodeProps) {
         </>
       )}
 
-      {/* 文字标签（绝对定位，不影响节点尺寸） */}
+      {/* 文字标签（绝对定位，不影响节点尺寸，缩放感知模糊） */}
       {isEditingTitle ? (
         <input
           ref={inputRef}
@@ -174,8 +180,13 @@ export function DotNode({ data, selected }: NodeProps) {
         />
       ) : (
         <span
-          className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[10px] leading-tight text-center max-w-[80px] truncate transition-colors duration-150 select-none whitespace-nowrap cursor-text"
-          style={{ color: isHovered || selected ? 'var(--text-primary)' : 'var(--text-muted)' }}
+          className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[10px] leading-tight text-center max-w-[80px] truncate select-none whitespace-nowrap cursor-text"
+          style={{
+            color: isHovered || selected ? 'var(--text-primary)' : 'var(--text-muted)',
+            opacity: labelOpacity,
+            filter: labelBlur > 0 ? `blur(${labelBlur}px)` : 'none',
+            transition: 'opacity 0.2s, filter 0.2s',
+          }}
           onDoubleClick={(e) => {
             e.stopPropagation();
             setEditTitle(title);

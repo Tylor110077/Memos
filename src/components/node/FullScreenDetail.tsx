@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, FileText, Loader2, Sparkles, MessageSquare, Send, ChevronDown, Split, Trash2, StickyNote, PenLine, Highlighter, Plus, Clock, Globe } from 'lucide-react';
+import { X, FileText, Loader2, Sparkles, MessageSquare, Send, ChevronDown, Split, Trash2, StickyNote, PenLine, Highlighter, Plus, Clock, Globe, Download } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import dynamic from 'next/dynamic';
 import { useUIStore } from '@/stores/uiStore';
@@ -92,8 +92,9 @@ export function FullScreenDetail() {
   const [iframeLoading, setIframeLoading] = useState(true);
   const [isClosing, setIsClosing] = useState(false); // 关闭动效状态
 
-  // ===== Tab 切换（内容 / 白板） =====
-  const [activeTab, setActiveTab] = useState<'content' | 'whiteboard'>('content');
+  // ===== Tab 切换（源文件 / 内容 / 白板） =====
+  const [activeTab, setActiveTab] = useState<'source' | 'content' | 'whiteboard'>('content');
+  const [sourceMode, setSourceMode] = useState<'raw' | 'rendered'>('raw');
 
   // ===== 分化状态 =====
   const [showSplitForm, setShowSplitForm] = useState(false);
@@ -649,6 +650,26 @@ export function FullScreenDetail() {
                 <Split size={18} />
               </button>
               <button
+                onClick={() => {
+                  if (!node) return;
+                  const { generateNodeMarkdown } = require('@/lib/export/MarkdownGenerator');
+                  const { sanitizeFileName } = require('@/lib/export/FileNameSanitizer');
+                  const { nodes: allNodes, edges } = useGraphStore.getState();
+                  const md = generateNodeMarkdown(node, edges, allNodes);
+                  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `${sanitizeFileName(node.title, node.id)}.md`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                title="下载为 Markdown"
+              >
+                <Download size={18} />
+              </button>
+              <button
                 onClick={handleDelete}
                 className="p-2 rounded-lg hover:bg-red-500/15 text-[var(--text-secondary)] hover:text-red-400 transition-colors"
                 title="删除节点"
@@ -672,10 +693,11 @@ export function FullScreenDetail() {
             </div>
           </div>
 
-          {/* Tab 切换：内容 / 白板 */}
+          {/* Tab 切换：源文件 / 内容 / 白板 */}
           <div className="px-6 border-b border-[var(--border)]">
             <div className="max-w-3xl mx-auto flex gap-4">
               {([
+                { value: 'source', label: '源文件' },
                 { value: 'content', label: '内容' },
                 { value: 'whiteboard', label: '白板' },
               ] as const).map(tab => (
@@ -728,7 +750,58 @@ export function FullScreenDetail() {
           )}
 
           {/* Content Area */}
-          {activeTab === 'content' ? (
+          {activeTab === 'source' ? (
+          /* 源文件视图：展示当前节点的 MD 原始内容 */
+          <div className="flex-1 relative overflow-hidden flex flex-col">
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="max-w-3xl mx-auto">
+                {/* 文件名 + 切换按钮 */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <FileText size={14} className="text-[var(--accent)]" />
+                    <span className="text-xs text-[var(--text-muted)] font-mono">{node.title}.md</span>
+                  </div>
+                  <div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] bg-[var(--bg-tertiary)] p-0.5">
+                    <button
+                      onClick={() => setSourceMode('raw')}
+                      className={`px-2 py-0.5 text-[10px] rounded transition-colors ${sourceMode === 'raw' ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+                    >
+                      原生
+                    </button>
+                    <button
+                      onClick={() => setSourceMode('rendered')}
+                      className={`px-2 py-0.5 text-[10px] rounded transition-colors ${sourceMode === 'rendered' ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+                    >
+                      渲染
+                    </button>
+                  </div>
+                </div>
+                {/* 内容区 */}
+                {sourceMode === 'raw' ? (
+                  <pre className="text-xs leading-relaxed text-[var(--text-secondary)] font-mono whitespace-pre-wrap break-words bg-[var(--bg-primary)] rounded-lg border border-[var(--border)] p-4 overflow-x-auto">
+                    {(() => {
+                      try {
+                        const { generateNodeMarkdown } = require('@/lib/export/MarkdownGenerator');
+                        const { nodes: allNodes, edges } = useGraphStore.getState();
+                        return generateNodeMarkdown(node, edges, allNodes);
+                      } catch { return '# 生成失败'; }
+                    })()}
+                  </pre>
+                ) : (
+                  <div className="bg-[var(--bg-primary)] rounded-lg border border-[var(--border)] p-4 prose prose-invert prose-sm max-w-none">
+                    <MarkdownRenderer content={(() => {
+                      try {
+                        const { generateNodeMarkdown } = require('@/lib/export/MarkdownGenerator');
+                        const { nodes: allNodes, edges } = useGraphStore.getState();
+                        return generateNodeMarkdown(node, edges, allNodes);
+                      } catch { return '# 生成失败'; }
+                    })()} />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          ) : activeTab === 'content' ? (
           <div className="flex-1 relative overflow-hidden flex flex-col">
           <div ref={contentScrollRef} className="flex-1 overflow-y-auto flex flex-col">
             {/* 内容展示区：自然高度，随滚动流动。key=node.id 确保 notes 变化不重建 iframe */}

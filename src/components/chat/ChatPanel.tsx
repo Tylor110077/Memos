@@ -11,9 +11,10 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { parseConversationToGraph } from '@/lib/graphUtils';
 import { createConversation, updateConversation } from '@/lib/db';
 import { SelectionPopup } from '@/components/shared/SelectionPopup';
+import { SegmentNameModal } from './SegmentNameModal';
 import MessageList from './MessageList';
 import ChatInput from './ChatInput';
-import type { ResponseStyle } from '@/types';
+import type { ResponseStyle, ChatSegment } from '@/types';
 
 // 回答风格选项（与 AI 助手一致）
 const STYLE_OPTIONS: { value: ResponseStyle; label: string }[] = [
@@ -47,6 +48,56 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
   const [webSearchStatus, setWebSearchStatus] = useState<'searching' | { sources: number } | null>(null);
   const [selectionPopup, setSelectionPopup] = useState<{ text: string; x: number; y: number } | null>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
+
+  // ===== 对话分段 =====
+  const { segments, addSegment, updateSegment, removeSegment } = useChatStore();
+  const [markStartIndex, setMarkStartIndex] = useState<number | null>(null);
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [pendingEndIndex, setPendingEndIndex] = useState<number | null>(null);
+  const [generatingSegment, setGeneratingSegment] = useState<string | null>(null);
+
+  const handleMarkStart = (index: number) => { setMarkStartIndex(index); };
+  const handleMarkEnd = (index: number) => { setPendingEndIndex(index); setShowNameModal(true); };
+  const handleCancelMark = () => { setMarkStartIndex(null); setShowNameModal(false); setPendingEndIndex(null); };
+  const handleConfirmSegment = (name: string) => {
+    if (markStartIndex === null || pendingEndIndex === null) return;
+    const seg: ChatSegment = {
+      id: nanoid(),
+      name,
+      startMsgIndex: markStartIndex,
+      endMsgIndex: pendingEndIndex,
+      collapsed: false,
+      createdAt: new Date().toISOString(),
+    };
+    addSegment(seg);
+    setMarkStartIndex(null);
+    setShowNameModal(false);
+    setPendingEndIndex(null);
+  };
+  const handleToggleSegment = (id: string) => {
+    const seg = segments.find(s => s.id === id);
+    if (seg) updateSegment(id, { collapsed: !seg.collapsed });
+  };
+  const handleSelectSegment = (seg: ChatSegment) => {
+    const indices = new Set<number>();
+    for (let i = seg.startMsgIndex; i <= seg.endMsgIndex; i++) indices.add(i);
+    setSelectedMessages(indices);
+  };
+  const handleGenerateSegment = async (seg: ChatSegment) => {
+    if (!currentBoardId || generatingSegment) return;
+    setGeneratingSegment(seg.id);
+    try {
+      const segMessages = messages.slice(seg.startMsgIndex, seg.endMsgIndex + 1)
+        .map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : '' }));
+      const changes = await parseConversationToGraph(segMessages, nodes, currentBoardId, edges);
+      if (changes && (changes.newEdges.length > 0 || changes.updatedNodes.length > 0 || changes.newNodes.length > 0)) {
+        applyGraphChanges(changes);
+      }
+    } catch (e) { console.error('分段生成节点失败:', e); }
+    finally { setGeneratingSegment(null); }
+  };
+  const handleRenameSegment = (id: string, name: string) => { updateSegment(id, { name }); };
+  const handleRemoveSegment = (id: string) => { removeSegment(id); };
 
   const { messages, append, setMessages, status, data } = useChat({
     api: '/api/chat',
@@ -295,6 +346,8 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
           messages={messages}
           selectedMessages={selectedMessages}
           webSearchStatus={webSearchStatus}
+          segments={segments}
+          markStartIndex={markStartIndex}
           onSelectChange={(index, checked) => {
             setSelectedMessages((prev) => {
               const next = new Set(prev);
@@ -307,14 +360,20 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
             });
           }}
           onEditMessage={(id, newContent) => {
-            // 找到消息索引，截断后续消息，修改内容后重新发送
             const idx = messages.findIndex(m => m.id === id);
             if (idx < 0) return;
             const truncated = messages.slice(0, idx);
             setMessages([...truncated, { ...messages[idx], content: newContent }]);
-            // 重新发送编辑后的消息
             setTimeout(() => append({ role: 'user', content: newContent }), 50);
           }}
+          onMarkStart={handleMarkStart}
+          onMarkEnd={handleMarkEnd}
+          onToggleSegment={handleToggleSegment}
+          onSelectSegment={handleSelectSegment}
+          onGenerateSegment={handleGenerateSegment}
+          onRenameSegment={handleRenameSegment}
+          onRemoveSegment={handleRemoveSegment}
+          generatingSegment={generatingSegment}
         />
       </div>
 
@@ -359,6 +418,16 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
           append({ role: 'user', content: message });
         }}
         disabled={isLoading}
+      />
+
+      {/* 分段命名弹窗 */}
+      <SegmentNameModal
+        visible={showNameModal}
+        messages={markStartIndex !== null && pendingEndIndex !== null
+          ? messages.slice(markStartIndex, pendingEndIndex + 1).map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : '' }))
+          : []}
+        onConfirm={handleConfirmSegment}
+        onCancel={handleCancelMark}
       />
     </div>
   );

@@ -6,7 +6,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useGraphStore } from '@/stores/graphStore';
 import { useChatStore } from '@/stores/chatStore';
-import { X, Trash2, Split, Loader2, MessageSquare, Lightbulb, BookOpen, Info, RefreshCw, Sparkles, StickyNote, PenTool } from 'lucide-react';
+import { X, Trash2, Split, Loader2, MessageSquare, Lightbulb, BookOpen, Info, RefreshCw, Sparkles, StickyNote, PenTool, Download } from 'lucide-react';
 import { getCachedRecommendations, saveRecommendations, clearRecommendations } from '@/lib/db';
 import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { CognitionRing } from '@/components/cognition/CognitionRing';
@@ -489,6 +489,25 @@ export function NodeDetail() {
         >
           <Split size={13} />
           分化
+        </button>
+        <button
+          onClick={() => {
+            const { generateNodeMarkdown } = require('@/lib/export/MarkdownGenerator');
+            const { sanitizeFileName } = require('@/lib/export/FileNameSanitizer');
+            const { nodes: allNodes, edges } = useGraphStore.getState();
+            const md = generateNodeMarkdown(node, edges, allNodes);
+            const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${sanitizeFileName(node.title, node.id)}.md`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+        >
+          <Download size={13} />
+          下载
         </button>
         <button
           onClick={() => {

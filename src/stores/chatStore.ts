@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ChatMode, Conversation } from '@/types';
+import type { ChatMode, Conversation, ChatSegment } from '@/types';
 
 interface ChatState {
   currentConversation: Conversation | null;
@@ -12,6 +12,8 @@ interface ChatState {
   resetSignal: number;
   /** 待加载的历史对话，ChatPanel 消费后置空 */
   pendingConversation: Conversation | null;
+  /** 对话分段 */
+  segments: ChatSegment[];
 
   setMode: (mode: ChatMode) => void;
   setConversation: (conv: Conversation | null) => void;
@@ -21,6 +23,10 @@ interface ChatState {
   setPendingMessage: (msg: string | null, category?: 'knowledge' | 'trivia' | null) => void;
   triggerReset: () => void;
   setPendingConversation: (conv: Conversation | null) => void;
+  addSegment: (seg: ChatSegment) => void;
+  updateSegment: (id: string, updates: Partial<ChatSegment>) => void;
+  removeSegment: (id: string) => void;
+  setSegments: (segs: ChatSegment[]) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -32,6 +38,7 @@ export const useChatStore = create<ChatState>((set) => ({
   pendingContentCategory: null,
   resetSignal: 0,
   pendingConversation: null,
+  segments: [],
 
   setMode: (mode) => set({ currentMode: mode }),
   setConversation: (conv) => set({ currentConversation: conv }),
@@ -41,4 +48,12 @@ export const useChatStore = create<ChatState>((set) => ({
   setPendingMessage: (msg, category = null) => set({ pendingMessage: msg, pendingContentCategory: category }),
   triggerReset: () => set((state) => ({ resetSignal: state.resetSignal + 1 })),
   setPendingConversation: (conv) => set({ pendingConversation: conv }),
+  addSegment: (seg) => set((state) => ({ segments: [...state.segments, seg] })),
+  updateSegment: (id, updates) => set((state) => ({
+    segments: state.segments.map(s => s.id === id ? { ...s, ...updates } : s),
+  })),
+  removeSegment: (id) => set((state) => ({
+    segments: state.segments.filter(s => s.id !== id),
+  })),
+  setSegments: (segs) => set({ segments: segs }),
 }));

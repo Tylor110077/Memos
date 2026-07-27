@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { Message } from 'ai';
-import { Sparkles, Check, Loader2, StickyNote, Copy, Pencil } from 'lucide-react';
+import { Sparkles, Check, Loader2, StickyNote, Copy, Pencil, BookmarkPlus, BookmarkCheck } from 'lucide-react';
 import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { useGraphStore } from '@/stores/graphStore';
 import { useBoardStore } from '@/stores/boardStore';
@@ -13,9 +13,13 @@ interface MessageBubbleProps {
   message: Message;
   selected?: boolean;
   onSelectChange?: (checked: boolean) => void;
+  /** 分段标记状态 */
+  segmentMark?: 'none' | 'start-available' | 'end-available' | 'is-start' | 'in-segment';
+  onMarkStart?: () => void;
+  onMarkEnd?: () => void;
 }
 
-export default function MessageBubble({ message, selected = false, onSelectChange, onEditMessage }: MessageBubbleProps & { onEditMessage?: (id: string, newContent: string) => void }) {
+export default function MessageBubble({ message, selected = false, onSelectChange, onEditMessage, segmentMark = 'none', onMarkStart, onMarkEnd }: MessageBubbleProps & { onEditMessage?: (id: string, newContent: string) => void }) {
   const isUser = message.role === 'user';
   const [isGenerating, setIsGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
@@ -188,6 +192,31 @@ export default function MessageBubble({ message, selected = false, onSelectChang
             />
             <span className="text-[10px] text-[var(--text-muted)] opacity-60 group-hover:opacity-100 transition-opacity">选择</span>
           </label>
+          {/* 分段标记按钮 */}
+          {segmentMark === 'start-available' && (
+            <button
+              onClick={onMarkStart}
+              className="flex items-center gap-1 px-2 py-1 rounded-full text-[11px] text-[var(--text-muted)] hover:text-amber-400 hover:bg-amber-400/10 transition-all"
+              title="标记为分段起始"
+            >
+              <BookmarkPlus size={12} />
+            </button>
+          )}
+          {segmentMark === 'end-available' && (
+            <button
+              onClick={onMarkEnd}
+              className="flex items-center gap-1 px-2 py-1 rounded-full text-[11px] text-[var(--text-muted)] hover:text-amber-400 hover:bg-amber-400/10 transition-all"
+              title="标记为分段结束"
+            >
+              <BookmarkCheck size={12} />
+            </button>
+          )}
+          {segmentMark === 'is-start' && (
+            <span className="flex items-center gap-1 px-2 py-1 rounded-full text-[11px] text-amber-400 bg-amber-400/10">
+              <BookmarkCheck size={12} />
+              起始
+            </span>
+          )}
         </div>
       </div>
     </div>
