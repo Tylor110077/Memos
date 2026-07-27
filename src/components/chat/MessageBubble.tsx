@@ -200,6 +200,7 @@ export default function MessageBubble({ message, selected = false, onSelectChang
               title="标记为分段起始"
             >
               <BookmarkPlus size={12} />
+              <span>分段起</span>
             </button>
           )}
           {segmentMark === 'end-available' && (
@@ -209,6 +210,7 @@ export default function MessageBubble({ message, selected = false, onSelectChang
               title="标记为分段结束"
             >
               <BookmarkCheck size={12} />
+              <span>分段止</span>
             </button>
           )}
           {segmentMark === 'is-start' && (

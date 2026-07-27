@@ -20,16 +20,18 @@ interface MessageListProps {
   onMarkEnd?: (index: number) => void;
   onToggleSegment?: (id: string) => void;
   onSelectSegment?: (seg: ChatSegment) => void;
+  onDeselectSegment?: (seg: ChatSegment) => void;
   onGenerateSegment?: (seg: ChatSegment) => void;
   onRenameSegment?: (id: string, name: string) => void;
   onRemoveSegment?: (id: string) => void;
   generatingSegment?: string | null;
+  isSegmentSelected?: (seg: ChatSegment) => boolean;
 }
 
 export default function MessageList({
   messages, selectedMessages, webSearchStatus, segments = [], markStartIndex,
   onSelectChange, onEditMessage, onMarkStart, onMarkEnd,
-  onToggleSegment, onSelectSegment, onGenerateSegment, onRenameSegment, onRemoveSegment, generatingSegment,
+  onToggleSegment, onSelectSegment, onDeselectSegment, onGenerateSegment, onRenameSegment, onRemoveSegment, generatingSegment, isSegmentSelected,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -80,57 +82,78 @@ export default function MessageList({
     <div className="flex-1 overflow-y-auto px-4 py-4">
       {messages.map((message, index) => {
         const segAtThisIndex = segmentAtStart.get(index);
-
-        // 如果该 segment 折叠，渲染 SegmentHeader 并跳过后续消息
-        if (segAtThisIndex && segAtThisIndex.collapsed) {
-          const count = segAtThisIndex.endMsgIndex - segAtThisIndex.startMsgIndex + 1;
-          return (
-            <SegmentHeader
-              key={`seg-${segAtThisIndex.id}`}
-              segment={segAtThisIndex}
-              messageCount={count}
-              onToggleCollapse={() => onToggleSegment?.(segAtThisIndex.id)}
-              onSelectAll={() => onSelectSegment?.(segAtThisIndex)}
-              onGenerateNodes={() => onGenerateSegment?.(segAtThisIndex)}
-              onRename={(name) => onRenameSegment?.(segAtThisIndex.id, name)}
-              onRemove={() => onRemoveSegment?.(segAtThisIndex.id)}
-              generating={generatingSegment === segAtThisIndex.id}
-            />
-          );
-        }
-
-        // 如果属于折叠 segment 范围内的非起始消息，跳过
         const parentSeg = segmentRange.get(index);
-        if (parentSeg && parentSeg.collapsed && index !== parentSeg.startMsgIndex) {
+
+        // 属于折叠 segment 范围内的非起始消息 → 不渲染（由起始位置的动画容器统一处理）
+        if (parentSeg && index !== parentSeg.startMsgIndex) {
           return null;
         }
 
-        // 展开态的 segment 起始位置：先渲染 header 再渲染消息
         const mark = getSegmentMark(index);
-        return (
-          <div key={message.id}>
-            {segAtThisIndex && !segAtThisIndex.collapsed && (
+
+        // 如果该 index 是某个 segment 的起始，渲染 header + 可折叠内容区
+        if (segAtThisIndex) {
+          const seg = segAtThisIndex;
+          const count = seg.endMsgIndex - seg.startMsgIndex + 1;
+          const isCollapsed = seg.collapsed;
+
+          return (
+            <div key={`seg-block-${seg.id}`}>
               <SegmentHeader
-                segment={segAtThisIndex}
-                messageCount={segAtThisIndex.endMsgIndex - segAtThisIndex.startMsgIndex + 1}
-                onToggleCollapse={() => onToggleSegment?.(segAtThisIndex.id)}
-                onSelectAll={() => onSelectSegment?.(segAtThisIndex)}
-                onGenerateNodes={() => onGenerateSegment?.(segAtThisIndex)}
-                onRename={(name) => onRenameSegment?.(segAtThisIndex.id, name)}
-                onRemove={() => onRemoveSegment?.(segAtThisIndex.id)}
-                generating={generatingSegment === segAtThisIndex.id}
+                segment={seg}
+                messageCount={count}
+                isSelected={isSegmentSelected?.(seg) ?? false}
+                onToggleCollapse={() => onToggleSegment?.(seg.id)}
+                onSelectAll={() => onSelectSegment?.(seg)}
+                onDeselectAll={() => onDeselectSegment?.(seg)}
+                onGenerateNodes={() => onGenerateSegment?.(seg)}
+                onRename={(name) => onRenameSegment?.(seg.id, name)}
+                onRemove={() => onRemoveSegment?.(seg.id)}
+                generating={generatingSegment === seg.id}
               />
-            )}
-            <MessageBubble
-              message={message}
-              selected={selectedMessages?.has(index) ?? false}
-              onSelectChange={(checked) => onSelectChange?.(index, checked)}
-              onEditMessage={onEditMessage}
-              segmentMark={mark}
-              onMarkStart={() => onMarkStart?.(index)}
-              onMarkEnd={() => onMarkEnd?.(index)}
-            />
-          </div>
+              {/* 丝滑折叠动画容器 */}
+              <div
+                className="grid transition-all duration-300 ease-in-out"
+                style={{
+                  gridTemplateRows: isCollapsed ? '0fr' : '1fr',
+                  opacity: isCollapsed ? 0 : 1,
+                }}
+              >
+                <div className="overflow-hidden min-h-0">
+                  {messages.slice(seg.startMsgIndex, seg.endMsgIndex + 1).map((msg, i) => {
+                    const msgIndex = seg.startMsgIndex + i;
+                    const msgMark = getSegmentMark(msgIndex);
+                    return (
+                      <MessageBubble
+                        key={msg.id}
+                        message={msg}
+                        selected={selectedMessages?.has(msgIndex) ?? false}
+                        onSelectChange={(checked) => onSelectChange?.(msgIndex, checked)}
+                        onEditMessage={onEditMessage}
+                        segmentMark={msgMark}
+                        onMarkStart={() => onMarkStart?.(msgIndex)}
+                        onMarkEnd={() => onMarkEnd?.(msgIndex)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // 普通消息（不属于任何 segment）
+        return (
+          <MessageBubble
+            key={message.id}
+            message={message}
+            selected={selectedMessages?.has(index) ?? false}
+            onSelectChange={(checked) => onSelectChange?.(index, checked)}
+            onEditMessage={onEditMessage}
+            segmentMark={mark}
+            onMarkStart={() => onMarkStart?.(index)}
+            onMarkEnd={() => onMarkEnd?.(index)}
+          />
         );
       })}
       {/* 联网搜索状态指示器 */}

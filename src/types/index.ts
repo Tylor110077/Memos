@@ -80,6 +80,7 @@ export interface Conversation {
   boardName?: string;
   mode: ChatMode;
   messages: ChatMessage[];
+  segments?: ChatSegment[];
   createdAt: string;
   updatedAt: string;
 }

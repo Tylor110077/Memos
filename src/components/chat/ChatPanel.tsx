@@ -39,7 +39,7 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
   const pendingConsumedRef = useRef<string | null>(null); // 防止 pendingMessage 被重复消费（发送两遍）
   const { nodes, edges, applyGraphChanges, selectedNodeId, addNoteToNode } = useGraphStore();
   const selectedNode = nodes.find(n => n.id === selectedNodeId);
-  const { pendingMessage, setPendingMessage, resetSignal, pendingConversation, setPendingConversation } = useChatStore();
+  const { pendingMessage, setPendingMessage, resetSignal, pendingConversation, setPendingConversation, setSegments } = useChatStore();
   const { currentBoardId, boards } = useBoardStore();
   const { responseStyle, setResponseStyle, customStyle, apiKey, defaultSelectionOpen } = useSettingsStore();
   const [styleDropdownOpen, setStyleDropdownOpen] = useState(false);
@@ -83,15 +83,42 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
     for (let i = seg.startMsgIndex; i <= seg.endMsgIndex; i++) indices.add(i);
     setSelectedMessages(indices);
   };
+  const handleDeselectSegment = (seg: ChatSegment) => {
+    setSelectedMessages(prev => {
+      const next = new Set(prev);
+      for (let i = seg.startMsgIndex; i <= seg.endMsgIndex; i++) next.delete(i);
+      return next;
+    });
+  };
+  const isSegmentSelected = (seg: ChatSegment): boolean => {
+    for (let i = seg.startMsgIndex; i <= seg.endMsgIndex; i++) {
+      if (!selectedMessages.has(i)) return false;
+    }
+    return true;
+  };
   const handleGenerateSegment = async (seg: ChatSegment) => {
     if (!currentBoardId || generatingSegment) return;
     setGeneratingSegment(seg.id);
     try {
       const segMessages = messages.slice(seg.startMsgIndex, seg.endMsgIndex + 1)
         .map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : '' }));
-      const changes = await parseConversationToGraph(segMessages, nodes, currentBoardId, edges);
-      if (changes && (changes.newEdges.length > 0 || changes.updatedNodes.length > 0 || changes.newNodes.length > 0)) {
-        applyGraphChanges(changes);
+      // 直接调用归纳 API 生成新节点（而非仅建边）
+      const res = await fetch('/api/graph/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation: segMessages,
+          existingNodes: nodes.map(n => ({ id: n.id, title: n.title })),
+        }),
+      });
+      if (res.ok) {
+        const parseResult = await res.json();
+        // 使用 buildGraphChanges 但强制允许新节点
+        const { buildGraphChanges } = await import('@/lib/graphUtils');
+        const changes = buildGraphChanges(parseResult, nodes, currentBoardId, edges, true);
+        if (changes && (changes.newNodes.length > 0 || changes.newEdges.length > 0)) {
+          applyGraphChanges(changes);
+        }
       }
     } catch (e) { console.error('分段生成节点失败:', e); }
     finally { setGeneratingSegment(null); }
@@ -140,7 +167,7 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
         timestamp: now,
       }));
       if (currentConvIdRef.current) {
-        await updateConversation(currentConvIdRef.current, { messages: chatMessages, updatedAt: now });
+        await updateConversation(currentConvIdRef.current, { messages: chatMessages, segments: useChatStore.getState().segments, updatedAt: now });
       } else {
         const currentBoardName = boards.find(b => b.id === currentBoardId)?.name;
         const conv = await createConversation({
@@ -149,6 +176,7 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
           boardName: currentBoardName,
           mode,
           messages: chatMessages,
+          segments: useChatStore.getState().segments,
           createdAt: now,
           updatedAt: now,
         });
@@ -159,6 +187,12 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, [messages, mode, selectedNodeId]);
+
+  // 分段变更时也持久化
+  useEffect(() => {
+    if (!currentConvIdRef.current || segments.length === 0) return;
+    updateConversation(currentConvIdRef.current, { segments }).catch(() => {});
+  }, [segments]);
 
   // 监听 resetSignal：清空消息，开始新对话
   const isFirstRender = useRef(true);
@@ -177,6 +211,7 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
     if (pendingConversation) {
       currentConvIdRef.current = pendingConversation.id;
       setMessages(pendingConversation.messages.map((m) => ({ id: m.id, role: m.role, content: m.content })));
+      setSegments(pendingConversation.segments || []);
       setPendingConversation(null);
     }
   }, [pendingConversation, setMessages, setPendingConversation]);
@@ -370,10 +405,12 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
           onMarkEnd={handleMarkEnd}
           onToggleSegment={handleToggleSegment}
           onSelectSegment={handleSelectSegment}
+          onDeselectSegment={handleDeselectSegment}
           onGenerateSegment={handleGenerateSegment}
           onRenameSegment={handleRenameSegment}
           onRemoveSegment={handleRemoveSegment}
           generatingSegment={generatingSegment}
+          isSegmentSelected={isSegmentSelected}
         />
       </div>
 

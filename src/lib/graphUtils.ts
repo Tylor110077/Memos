@@ -5,12 +5,14 @@ import type { GraphParseResult } from '@/schemas';
 /**
  * 将图谱解析结果转换为可应用的 GraphChanges
  * @param existingEdges 当前已有的边，用于过滤过密连接
+ * @param forceNewNodes 是否强制创建新节点（分段归纳时为 true）
  */
 export function buildGraphChanges(
   parseResult: GraphParseResult,
   existingNodes: KnowledgeNode[],
   boardId: string,
-  existingEdges: KnowledgeEdge[] = []
+  existingEdges: KnowledgeEdge[] = [],
+  forceNewNodes: boolean = false
 ): GraphChanges {
   const newNodes: KnowledgeNode[] = [];
   const newEdges: KnowledgeEdge[] = [];
@@ -30,8 +32,24 @@ export function buildGraphChanges(
     titleToNode.set(node.title, node);
   }
 
-  // 注意：自动归纳不创建新节点，只建立已有节点间的连接
-  // parseResult.newNodes 被忽略，新节点应由用户主动通过“生成节点”按钮创建
+  // 自动归纳不创建新节点，但分段归纳（forceNewNodes）时允许创建
+  if (forceNewNodes) {
+    for (const parsed of parseResult.newNodes) {
+      const node: KnowledgeNode = {
+        id: nanoid(),
+        boardId,
+        type: parsed.type,
+        title: parsed.title,
+        content: parsed.content,
+        level: parsed.level,
+        status: 'lit',
+        position: calculatePosition(parsed.relatedNodeTitles, titleToNode, existingNodes),
+        metadata: { createdAt: now, updatedAt: now },
+      };
+      newNodes.push(node);
+      titleToNode.set(node.title, node);
+    }
+  }
 
   // 处理更新节点
   for (const updated of parseResult.updatedNodes) {
