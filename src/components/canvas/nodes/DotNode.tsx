@@ -110,9 +110,9 @@ export function DotNode({ data, selected }: NodeProps) {
   if (isCard) {
     return (
       <div className="relative" style={{ opacity: isDimmed ? 0.15 : 1 }}>
-        {/* 卡片形态：手柄放在左右边缘，可抓取连线 */}
-        <Handle type="target" position={Position.Left} style={{ opacity: 0, width: 10, height: 24, minWidth: 0, border: 'none', background: 'transparent', cursor: 'crosshair' }} />
-        <Handle type="source" position={Position.Right} style={{ opacity: 0, width: 10, height: 24, minWidth: 0, border: 'none', background: 'transparent', cursor: 'crosshair' }} />
+        {/* 卡片形态：手柄置于卡片中心，连线从中心出发 */}
+        <Handle type="target" position={Position.Top} style={{ opacity: 0, width: 1, height: 1, minWidth: 0, minHeight: 0, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', border: 'none', padding: 0, margin: 0 }} />
+        <Handle type="source" position={Position.Bottom} style={{ opacity: 0, width: 1, height: 1, minWidth: 0, minHeight: 0, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', border: 'none', padding: 0, margin: 0 }} />
         <NodeCard node={node as unknown as KnowledgeNode} selected={selected} onOpenDetail={() => openFullScreen(node.id as string)} />
       </div>
     );
