@@ -81,3 +81,33 @@ export async function understandContent(params: {
   const data = await res.json();
   return data.summary || '';
 }
+
+export interface NodeMedia {
+  kind: 'image' | 'video';
+  dataUrls: string[];
+}
+
+/**
+ * 从节点构建可用于对话的媒体上下文。
+ * - 图片节点：直接返回图片 dataUrl
+ * - 视频节点：抽帧后返回多张帧图
+ * - 文档/无媒体：返回 null（文本已在 content 中）
+ */
+export async function buildNodeMedia(node: {
+  fileData?: string;
+  metadata?: { materialType?: string };
+}): Promise<NodeMedia | null> {
+  const mt = node.metadata?.materialType;
+  const isImage = mt === 'image' || (node.fileData?.startsWith('data:image') ?? false);
+  const isVideo = mt === 'video' || (node.fileData?.startsWith('data:video') ?? false);
+  if (isImage && node.fileData) return { kind: 'image', dataUrls: [node.fileData] };
+  if (isVideo && node.fileData) {
+    try {
+      const frames = await extractVideoFrames(node.fileData, 4);
+      return { kind: 'video', dataUrls: frames };
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}

@@ -9,6 +9,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { useBoardStore } from '@/stores/boardStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { parseConversationToGraph } from '@/lib/graphUtils';
+import { buildNodeMedia } from '@/lib/multimodal';
 import { apiFetch } from '@/lib/directApi';
 import { createConversation, updateConversation } from '@/lib/db';
 import { SelectionPopup } from '@/components/shared/SelectionPopup';
@@ -52,6 +53,14 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
   const messageListRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
+  // 选中节点的媒体上下文（图片/视频帧），供对话多模态理解
+  const [nodeMedia, setNodeMedia] = useState<{ kind: 'image' | 'video'; dataUrls: string[] } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedNode) { setNodeMedia(null); return; }
+    buildNodeMedia(selectedNode).then(m => { if (!cancelled) setNodeMedia(m); }).catch(() => setNodeMedia(null));
+    return () => { cancelled = true; };
+  }, [selectedNode?.id]);
 
   // ===== 对话分段 =====
   const { segments, addSegment, updateSegment, removeSegment } = useChatStore();
@@ -142,7 +151,8 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
       webSearch,
       context: {
         currentNodeTitle: selectedNode?.title || currentNodeTitle,
-        selectedNode: selectedNode ? { title: selectedNode.title, content: selectedNode.content } : undefined,
+        selectedNode: selectedNode ? { title: selectedNode.title, content: selectedNode.content, summary: selectedNode.summary } : undefined,
+        media: nodeMedia || undefined,
       },
     },
   });

@@ -13,7 +13,7 @@ import { SelectionPopup } from '@/components/shared/SelectionPopup';
 import { CognitionRing } from '@/components/cognition/CognitionRing';
 import { detectFileType } from '@/lib/fileUtils';
 import { apiFetch } from '@/lib/directApi';
-import { extractVideoFrames, understandContent } from '@/lib/multimodal';
+import { extractVideoFrames, understandContent, buildNodeMedia } from '@/lib/multimodal';
 import { DocxPreview } from '@/components/file-preview/DocxPreview';
 import { XlsxPreview } from '@/components/file-preview/XlsxPreview';
 import { PptxPreview } from '@/components/file-preview/PptxPreview';
@@ -515,6 +515,9 @@ export function FullScreenDetail() {
     setAiInput('');
     setAiLoading(true);
 
+    // 若节点带图片/视频，构建媒体上下文供对话多模态理解
+    const media = await buildNodeMedia(node).catch(() => null);
+
     try {
       const res = await apiFetch('/api/chat', {
         method: 'POST',
@@ -527,7 +530,7 @@ export function FullScreenDetail() {
           apiKey: apiKey || undefined,
           webSearch: aiWebSearch,
           // 注入当前节点上下文，/api/chat 会将其拼入 system prompt
-          context: { selectedNode: { title: node.title, content: node.content, summary: node.summary } },
+          context: { selectedNode: { title: node.title, content: node.content, summary: node.summary }, media: media || undefined },
         }),
       });
       if (!res.ok) throw new Error(`AI 请求失败: ${res.status}`);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { X, Link2, Loader2, Upload, FileText, FileSpreadsheet, FileType2 } from 'lucide-react';
+import { X, Link2, Loader2, Upload, FileText, FileSpreadsheet, FileType2, FileImage, FileVideo } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { useGraphStore } from '@/stores/graphStore';
 import { useBoardStore } from '@/stores/boardStore';
@@ -145,6 +145,14 @@ export function ImportMaterialModal({ visible, onClose }: ImportMaterialModalPro
           fileData = await readFileAsDataURL(file);
           materialType = 'pdf';
           break;
+        case 'image':
+          fileData = await readFileAsDataURL(file);
+          materialType = 'image';
+          break;
+        case 'video':
+          fileData = await readFileAsDataURL(file);
+          materialType = 'video';
+          break;
         case 'word':
         case 'excel':
           // 存储文件名，标记类型
@@ -227,6 +235,10 @@ export function ImportMaterialModal({ visible, onClose }: ImportMaterialModalPro
         return <FileSpreadsheet size={24} className="text-green-400" />;
       case 'markdown':
         return <FileText size={24} className="text-purple-400" />;
+      case 'image':
+        return <FileImage size={24} className="text-cyan-400" />;
+      case 'video':
+        return <FileVideo size={24} className="text-pink-400" />;
       default:
         return <FileText size={24} className="text-gray-400" />;
     }
@@ -311,7 +323,7 @@ export function ImportMaterialModal({ visible, onClose }: ImportMaterialModalPro
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.docx,.xlsx,.md,.doc,.xls"
+              accept=".pdf,.docx,.xlsx,.md,.doc,.xls,image/*,video/*,.mp4,.mov,.webm"
               className="hidden"
               onChange={(e) => handleFileSelect(e.target.files?.[0] || null)}
             />

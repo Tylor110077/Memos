@@ -7,7 +7,7 @@
  */
 import { streamText, generateObject, generateText, createDataStreamResponse, formatDataStreamPart } from 'ai';
 import { z } from 'zod';
-import { getModel } from '@/lib/ai';
+import { getModel, getVLModel } from '@/lib/ai';
 import { getSystemPrompt } from '@/prompts';
 import {
   graphParseSchema,
@@ -35,6 +35,22 @@ function parseBody(init?: RequestInit): Record<string, any> {
   return {};
 }
 
+/** 将媒体（图片/视频帧）附加到最后一条用户消息，构成多模态 content */
+function attachMediaToLastUser(messages: any[], dataUrls: string[], kind?: string): any[] {
+  const out = [...messages];
+  for (let i = out.length - 1; i >= 0; i--) {
+    if (out[i].role === 'user') {
+      const text = typeof out[i].content === 'string' ? out[i].content : '';
+      const parts: any[] = dataUrls.map((url) => ({ type: 'image_url', image_url: { url } }));
+      const hint = kind === 'video' ? '（以下是视频的关键帧）' : '';
+      parts.push({ type: 'text', text: `${hint}${text}` });
+      out[i] = { ...out[i], content: parts };
+      break;
+    }
+  }
+  return out;
+}
+
 // ===== /api/chat（流式） =====
 async function handleChat(body: Record<string, any>, signal?: AbortSignal): Promise<Response> {
   const { messages, mode, style, customStyleText, context, apiKey, webSearch } = body;
@@ -53,6 +69,16 @@ async function handleChat(body: Record<string, any>, signal?: AbortSignal): Prom
   if (context?.selectedNode) {
     const summaryPart = context.selectedNode.summary ? `\n【AI 摘要】${context.selectedNode.summary}` : '';
     systemPrompt += `\n\n【当前上下文】用户正在查看的知识节点是「${context.selectedNode.title}」，其内容为：\n${context.selectedNode.content?.slice(0, 2000) || '（无内容）'}${summaryPart}\n请基于此上下文回答用户的问题。`;
+  }
+
+  // 多模态：节点带图片/视频帧时，用视觉模型并把媒体随最后一条用户消息传入
+  const media = context?.media as { kind?: string; dataUrls?: string[] } | undefined;
+  if (media?.dataUrls?.length) {
+    const vlModel = getVLModel(apiKey);
+    if (!vlModel) return json({ error: '请先在设置中配置 API Key' }, 400);
+    const mmMessages = attachMediaToLastUser(messages, media.dataUrls, media.kind);
+    const result = streamText({ model: vlModel, system: systemPrompt, messages: mmMessages as any, abortSignal: signal });
+    return result.toDataStreamResponse();
   }
 
   // 联网搜索：直调 DashScope
