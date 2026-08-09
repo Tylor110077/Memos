@@ -124,7 +124,8 @@ export async function POST(req: Request) {
 
     // 注入选中节点上下文
     if (context?.selectedNode) {
-      systemPrompt += `\n\n【当前上下文】用户正在查看的知识节点是「${context.selectedNode.title}」，其内容为：\n${context.selectedNode.content?.slice(0, 2000) || '（无内容）'}\n请基于此上下文回答用户的问题。`;
+      const summaryPart = context.selectedNode.summary ? `\n【AI 摘要】${context.selectedNode.summary}` : '';
+      systemPrompt += `\n\n【当前上下文】用户正在查看的知识节点是「${context.selectedNode.title}」，其内容为：\n${context.selectedNode.content?.slice(0, 2000) || '（无内容）'}${summaryPart}\n请基于此上下文回答用户的问题。`;
     }
 
     // 联网搜索：直接调用 DashScope API（绕过 SDK 参数白名单限制）

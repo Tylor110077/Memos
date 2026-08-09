@@ -8,7 +8,7 @@ export interface Board {
 // ===== 节点类型 =====
 export type NodeType = 'concept' | 'theme' | 'material' | 'understanding' | 'question';
 export type NodeStatus = 'lit' | 'unlit';
-export type MaterialType = 'article' | 'video' | 'pdf' | 'docx' | 'xlsx' | 'pptx' | 'markdown';
+export type MaterialType = 'article' | 'video' | 'image' | 'pdf' | 'docx' | 'xlsx' | 'pptx' | 'markdown';
 
 export interface KnowledgeNode {
   id: string;
@@ -40,6 +40,8 @@ export interface NodeMetadata {
   domainId?: string;
   scrapedTitle?: string;
   scrapedFavicon?: string;
+  understood?: boolean;      // 是否已完成多模态理解
+  understoodAt?: string;
   createdAt: string;
   updatedAt: string;
 }

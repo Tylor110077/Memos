@@ -36,6 +36,7 @@ function CanvasInner() {
   const { openFullScreen, openNodeDetail } = useUIStore();
   const selectionTool = useUIStore((s) => s.selectionTool);
   const setSelectionTool = useUIStore((s) => s.setSelectionTool);
+  const nodeDisplayMode = useUIStore((s) => s.nodeDisplayMode);
   const { currentBoardId } = useBoardStore();
   const reactFlowInstance = useReactFlow();
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
@@ -57,7 +58,7 @@ function CanvasInner() {
       }),
     }));
   }, []);
-  const { dragStart, dragEnd, dragMove } = useForceSimulation(storeNodes, storeEdges, onSimTick);
+  const { dragStart, dragEnd, dragMove } = useForceSimulation(storeNodes, storeEdges, onSimTick, nodeDisplayMode);
 
   // Hover 高亮
   const highlightedIds = useMemo(() => {

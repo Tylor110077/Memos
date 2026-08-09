@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Globe, Link2, Maximize, ZoomIn, ZoomOut, Dices, Download, FolderTree, Combine, Loader2, Settings, Square, MousePointerClick, Plus, FolderOutput } from 'lucide-react';
+import { Globe, Link2, Maximize, ZoomIn, ZoomOut, Dices, Download, FolderTree, Combine, Loader2, Settings, Square, MousePointerClick, Plus, FolderOutput, LayoutGrid } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
 import { nanoid } from 'nanoid';
 import { useUIStore } from '@/stores/uiStore';
@@ -47,6 +47,8 @@ export function Toolbar({ selectedNodeIds }: ToolbarProps) {
   const openImportModal = useUIStore((s) => s.openImportModal);
   const selectionTool = useUIStore((s) => s.selectionTool);
   const setSelectionTool = useUIStore((s) => s.setSelectionTool);
+  const nodeDisplayMode = useUIStore((s) => s.nodeDisplayMode);
+  const setNodeDisplayMode = useUIStore((s) => s.setNodeDisplayMode);
   const currentBoardId = useBoardStore((s) => s.currentBoardId);
   const [breakthroughOpen, setBreakthroughOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -182,6 +184,18 @@ export function Toolbar({ selectedNodeIds }: ToolbarProps) {
           className={`${buttonClass} ${selectionTool === 'click' ? activeToolClass : ''}`}
         >
           <MousePointerClick size={18} />
+        </button>
+      </Tip>
+
+      <div className="my-1 border-t border-[var(--border)]" />
+
+      {/* 节点形态切换：圆点 / 卡片（图标保持不变，高亮表示当前为卡片） */}
+      <Tip label={nodeDisplayMode === 'dot' ? '切换为卡片形态' : '切换回圆点形态'}>
+        <button
+          onClick={() => setNodeDisplayMode(nodeDisplayMode === 'dot' ? 'card' : 'dot')}
+          className={`${buttonClass} ${nodeDisplayMode === 'card' ? activeToolClass : ''}`}
+        >
+          <LayoutGrid size={18} />
         </button>
       </Tip>
 

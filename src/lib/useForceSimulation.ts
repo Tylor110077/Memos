@@ -52,6 +52,7 @@ export function useForceSimulation(
   nodes: KnowledgeNode[],
   edges: KnowledgeEdge[],
   onTick: (positions: Map<string, { x: number; y: number }>) => void,
+  displayMode: 'dot' | 'card' = 'dot',
 ) {
   const simRef = useRef<Simulation<SimNode, undefined> | null>(null);
   const nodesRef = useRef<SimNode[]>([]);
@@ -74,19 +75,25 @@ export function useForceSimulation(
         target: e.target,
       }));
 
+    // 卡片形态需要更大的碰撞体积与连线距离，避免卡片挤在一起
+    const isCard = displayMode === 'card';
+    const collideRadius = isCard ? 110 : 25;
+    const linkDistance = isCard ? 240 : 80;
+    const chargeStrength = isCard ? -200 : -80;
+
     // 创建力模拟
     const sim = forceSimulation(simNodes)
       .force(
         'link',
         forceLink(simLinks as any)
           .id((d: any) => d.id)
-          .distance(80)
+          .distance(linkDistance)
           .strength(0.6),
       )
-      .force('charge', forceManyBody().strength(-80).distanceMax(260))
+      .force('charge', forceManyBody().strength(chargeStrength).distanceMax(isCard ? 420 : 260))
       .force('center', forceCenter(0, 0).strength(0.08))
-      .force('collide', forceCollide(25))
-      .force('contain', forceContain(900, 0.35)) // 边界约束：超出 900 半径拉回，防止无限扩散
+      .force('collide', forceCollide(collideRadius))
+      .force('contain', forceContain(isCard ? 1400 : 900, 0.35)) // 边界约束
       .alphaDecay(0.025) // 较慢衰减，让回弹振荡更充分持久
       .velocityDecay(0.4) // 较低阻尼，保留弹性振荡感
       .on('tick', () => {
@@ -106,7 +113,7 @@ export function useForceSimulation(
       sim.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes.length, edges.length]);
+  }, [nodes.length, edges.length, displayMode]);
 
   // 拖拽开始时固定节点并温和重新激活模拟（低能量，避免其他节点被持续推飞）
   const dragStart = useCallback((nodeId: string) => {

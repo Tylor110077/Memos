@@ -6,6 +6,9 @@ import { Handle, Position, useViewport, type NodeProps } from '@xyflow/react';
 import { FileTypeIcon } from '@/components/shared/FileTypeIcon';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useGraphStore } from '@/stores/graphStore';
+import { useUIStore } from '@/stores/uiStore';
+import { NodeCard } from './NodeCard';
+import type { KnowledgeNode } from '@/types';
 
 // 各节点类型对应的颜色（从 CSS 变量读取）
 const TYPE_COLORS: Record<string, string> = {
@@ -36,9 +39,9 @@ export function DotNode({ data, selected }: NodeProps) {
   const { zoom } = useViewport();
 
   // 缩放感知：zoom 越大文字越清晰，越小越模糊/透明（模仿 Obsidian）
-  // zoom < 0.6: 完全隐藏标签; 0.6~1.2: 渐显+模糊; > 1.2: 完全清晰
-  const labelOpacity = zoom < 0.6 ? 0 : zoom < 1.2 ? Math.min(1, (zoom - 0.6) / 0.6) : 1;
-  const labelBlur = zoom < 0.8 ? 3 : zoom < 1.2 ? Math.max(0, (1.2 - zoom) * 5) : 0;
+  // 模糊更慢：zoom >= 0.8 完全清晰；0.5~0.8 逐渐加模糊；< 0.35 隐藏
+  const labelOpacity = zoom < 0.35 ? 0 : zoom < 0.6 ? Math.min(1, (zoom - 0.35) / 0.25) : 1;
+  const labelBlur = zoom >= 0.8 ? 0 : zoom >= 0.5 ? ((0.8 - zoom) / 0.3) * 2 : 2;
   const isDimmed: boolean = node.isDimmed ?? false;
   const isHovered: boolean = node.isHovered ?? false;
   const isMultiSelected: boolean = node.isMultiSelected ?? false;
@@ -100,6 +103,20 @@ export function DotNode({ data, selected }: NodeProps) {
   // 文件类型节点：用文件图标替代圆点
   const isFileNode = nodeType === 'material' && !!materialType;
   const fileIconSize = level === 0 ? 28 : level === 1 ? 24 : level === 2 ? 20 : 16;
+
+  // 卡片形态：渲染 NodeCard（含 Handles 以保留连线）
+  const nodeDisplayMode = useUIStore((s) => s.nodeDisplayMode);
+  const openFullScreen = useUIStore((s) => s.openFullScreen);
+  if (nodeDisplayMode === 'card') {
+    return (
+      <div className="relative" style={{ opacity: isDimmed ? 0.15 : 1 }}>
+        {/* 卡片形态：手柄放在左右边缘，可抓取连线 */}
+        <Handle type="target" position={Position.Left} style={{ opacity: 0, width: 10, height: 24, minWidth: 0, border: 'none', background: 'transparent', cursor: 'crosshair' }} />
+        <Handle type="source" position={Position.Right} style={{ opacity: 0, width: 10, height: 24, minWidth: 0, border: 'none', background: 'transparent', cursor: 'crosshair' }} />
+        <NodeCard node={node as unknown as KnowledgeNode} selected={selected} onOpenDetail={() => openFullScreen(node.id as string)} />
+      </div>
+    );
+  }
 
   return (
     <div

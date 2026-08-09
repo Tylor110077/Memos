@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, FileText, Loader2, Sparkles, MessageSquare, Send, ChevronDown, Split, Trash2, StickyNote, PenLine, Highlighter, Plus, Clock, Globe, Download } from 'lucide-react';
+import { X, FileText, Loader2, Sparkles, MessageSquare, Send, ChevronDown, Split, Trash2, StickyNote, PenLine, Highlighter, Plus, Clock, Globe, Download, ScanEye } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import dynamic from 'next/dynamic';
 import { useUIStore } from '@/stores/uiStore';
@@ -13,6 +13,7 @@ import { SelectionPopup } from '@/components/shared/SelectionPopup';
 import { CognitionRing } from '@/components/cognition/CognitionRing';
 import { detectFileType } from '@/lib/fileUtils';
 import { apiFetch } from '@/lib/directApi';
+import { extractVideoFrames, understandContent } from '@/lib/multimodal';
 import { DocxPreview } from '@/components/file-preview/DocxPreview';
 import { XlsxPreview } from '@/components/file-preview/XlsxPreview';
 import { PptxPreview } from '@/components/file-preview/PptxPreview';
@@ -320,6 +321,35 @@ export function FullScreenDetail() {
     } catch (e) { console.error(e); }
     finally { setIsSummarizing(false); }
   };
+
+  // ===== 多模态理解：图片/文件/视频 =====
+  const [isUnderstanding, setIsUnderstanding] = useState(false);
+  const handleUnderstand = async () => {
+    if (!node || isUnderstanding) return;
+    setIsUnderstanding(true);
+    try {
+      const mt = node.metadata?.materialType;
+      const isImage = mt === 'image' || (node.fileData?.startsWith('data:image') ?? false);
+      const isVideo = mt === 'video';
+      let summaryText = '';
+      if (isVideo && node.fileData) {
+        const frames = await extractVideoFrames(node.fileData, 4);
+        summaryText = await understandContent({ type: 'video', dataUrls: frames, title: node.title, apiKey: apiKey || undefined });
+      } else if (isImage && node.fileData) {
+        summaryText = await understandContent({ type: 'image', dataUrls: [node.fileData], title: node.title, apiKey: apiKey || undefined });
+      } else {
+        summaryText = await understandContent({ type: 'file', text: node.content, title: node.title, apiKey: apiKey || undefined });
+      }
+      if (summaryText) {
+        setSummary(summaryText);
+        updateNode(node.id, { summary: summaryText, metadata: { ...node.metadata, understood: true, understoodAt: new Date().toISOString() } });
+      }
+    } catch (e) {
+      console.error('理解失败:', e);
+    } finally {
+      setIsUnderstanding(false);
+    }
+  };
   
   // ===== 笔记：创建空笔记 =====
   const handleCreateEmptyNote = () => {
@@ -487,7 +517,7 @@ export function FullScreenDetail() {
           apiKey: apiKey || undefined,
           webSearch: aiWebSearch,
           // 注入当前节点上下文，/api/chat 会将其拼入 system prompt
-          context: { selectedNode: { title: node.title, content: node.content } },
+          context: { selectedNode: { title: node.title, content: node.content, summary: node.summary } },
         }),
       });
       if (!res.ok) throw new Error(`AI 请求失败: ${res.status}`);
@@ -670,6 +700,14 @@ export function FullScreenDetail() {
                 title="下载为 Markdown"
               >
                 <Download size={18} />
+              </button>
+              <button
+                onClick={handleUnderstand}
+                disabled={isUnderstanding}
+                className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors disabled:opacity-50"
+                title="理解内容（图片/文件/视频）"
+              >
+                {isUnderstanding ? <Loader2 size={18} className="animate-spin" /> : <ScanEye size={18} />}
               </button>
               <button
                 onClick={handleDelete}
