@@ -7,6 +7,7 @@ import { useGraphStore } from '@/stores/graphStore';
 import { useBoardStore } from '@/stores/boardStore';
 import type { KnowledgeNode, MaterialType } from '@/types';
 import { detectFileType, readFileAsText, readFileAsDataURL, type DetectedFileType } from '@/lib/fileUtils';
+import { apiFetch } from '@/lib/directApi';
 
 interface ImportMaterialModalProps {
   visible: boolean;
@@ -72,7 +73,7 @@ export function ImportMaterialModal({ visible, onClose }: ImportMaterialModalPro
     let summary = '';
 
     try {
-      const res = await fetch('/api/scrape', {
+      const res = await apiFetch('/api/scrape', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: url.trim() }),

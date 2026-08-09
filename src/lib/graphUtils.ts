@@ -1,6 +1,8 @@
 import { nanoid } from 'nanoid';
 import type { KnowledgeNode, KnowledgeEdge, GraphChanges } from '@/types';
 import type { GraphParseResult } from '@/schemas';
+import { apiFetch } from '@/lib/directApi';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 /**
  * 将图谱解析结果转换为可应用的 GraphChanges
@@ -131,27 +133,32 @@ function randomOffset(min: number, max: number): number {
 
 /**
  * 调用图谱解析 API 并应用结果
+ * @param forceNewNodes 是否允许创建新节点（选中归纳/分段归纳时为 true）
  */
 export async function parseConversationToGraph(
   messages: { role: string; content: string }[],
   existingNodes: KnowledgeNode[],
   boardId: string,
-  existingEdges: KnowledgeEdge[] = []
+  existingEdges: KnowledgeEdge[] = [],
+  forceNewNodes: boolean = false
 ): Promise<GraphChanges | null> {
   try {
-    const res = await fetch('/api/graph/parse', {
+    const apiKey = useSettingsStore.getState().apiKey || undefined;
+    const res = await apiFetch('/api/graph/parse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         conversation: messages,
         existingNodes: existingNodes.map((n) => ({ id: n.id, title: n.title })),
+        apiKey,
+        createNodes: forceNewNodes,
       }),
     });
 
     if (!res.ok) return null;
 
     const parseResult: GraphParseResult = await res.json();
-    return buildGraphChanges(parseResult, existingNodes, boardId, existingEdges);
+    return buildGraphChanges(parseResult, existingNodes, boardId, existingEdges, forceNewNodes);
   } catch (error) {
     console.error('Failed to parse conversation:', error);
     return null;

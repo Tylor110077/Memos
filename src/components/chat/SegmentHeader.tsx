@@ -40,7 +40,7 @@ export function SegmentHeader({
 
   return (
     <div
-      className="flex items-center gap-2 px-3 py-1.5 my-0.5 rounded-lg border border-[var(--border)] bg-[var(--bg-tertiary)] group cursor-pointer select-none"
+      className="flex items-center gap-2 px-3 py-2 my-3 rounded-lg border border-[var(--border)] bg-[var(--bg-tertiary)] group cursor-pointer select-none"
       style={{ animation: 'fadeIn 150ms ease-out' }}
     >
       {/* 折叠/展开 */}

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { nanoid } from 'nanoid';
 import { useUIStore } from '@/stores/uiStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { apiFetch } from '@/lib/directApi';
 import { useGraphStore } from '@/stores/graphStore';
 import { useChatStore } from '@/stores/chatStore';
 import { X, Trash2, Split, Loader2, MessageSquare, Lightbulb, BookOpen, Info, RefreshCw, Sparkles, StickyNote, PenTool, Download } from 'lucide-react';
@@ -68,7 +69,7 @@ export function NodeDetail() {
   // 调用推荐 API（带重试，不处理缓存与 loading 状态）
   const requestRecommendations = useCallback(async (targetNode: KnowledgeNode): Promise<RelatedRecommendation[]> => {
     const doFetch = async (): Promise<RelatedRecommendation[]> => {
-      const res = await fetch('/api/recommend', {
+      const res = await apiFetch('/api/recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -195,7 +196,7 @@ export function NodeDetail() {
     try {
       const connectedEdges = edges.filter((e) => e.source === node.id || e.target === node.id);
 
-      const res = await fetch('/api/node/split', {
+      const res = await apiFetch('/api/node/split', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -207,6 +208,7 @@ export function NodeDetail() {
             target: e.target,
             relation: e.relation,
           })),
+          apiKey: apiKey || undefined,
         }),
       });
 

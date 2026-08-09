@@ -1,0 +1,183 @@
+{
+  "summary": {
+    "projectName": "Studyboard",
+    "locale": "zh-CN",
+    "modelId": "agent-work-loop-v4",
+    "reportContractVersion": 25,
+    "overview": "项目具备清晰的版本文档与静态检查脚本面，但核心归纳路径完全缺失行为验证层，失败诊断不可关联，交付无验收门禁。会话数据源不可用导致学习捕获无法评估。",
+    "aiAgentPractice": {
+      "inspectedSurfaces": [
+        "Skills"
+      ],
+      "coverageRows": [
+        {
+          "surface": "Skills",
+          "scopes": [
+            "Project"
+          ],
+          "count": 1,
+          "paths": [
+            ".qoder/skills/dev-workflow/SKILL.md"
+          ]
+        },
+        {
+          "surface": "Custom Agents",
+          "scopes": [
+            "Project"
+          ],
+          "count": 0
+        }
+      ]
+    },
+    "assignmentSummaries": [],
+    "dimensions": [
+      {
+        "id": "task-understanding",
+        "label": "任务理解",
+        "score": 52,
+        "summary": "逐版 PRD/任务文档提供良好任务入口，但唯一 Skill 引用了错误项目身份，且无会话证据验证范围管理行为。",
+        "findingRefs": [
+          "skill-wrong-project-identity"
+        ]
+      },
+      {
+        "id": "controlled-execution",
+        "label": "可控执行",
+        "score": 50,
+        "summary": "脚本面可用（dev/build/lint/typecheck），但 .env 密钥需求无文档，桌面框架声明不一致，权限行为未观察。",
+        "findingRefs": [
+          "environment-setup-incomplete"
+        ]
+      },
+      {
+        "id": "change-validation",
+        "label": "改动验证",
+        "score": 35,
+        "summary": "0 个测试文件、无测试运行器、无 CI；核心归纳策略变更与失败路径均无行为验证或可关联诊断。",
+        "findingRefs": [
+          "induction-strategy-change-unvalidated",
+          "no-behavior-feedback-layer",
+          "induction-failure-undiagnosable"
+        ]
+      },
+      {
+        "id": "reliable-delivery",
+        "label": "可靠交付",
+        "score": 38,
+        "summary": "单分支直投无合并验收门禁，无钩子或 CI 承接关键变更，回滚/恢复路径未观察。",
+        "findingRefs": [
+          "no-delivery-acceptance-gate"
+        ]
+      },
+      {
+        "id": "learning-capture",
+        "label": "经验沉淀",
+        "score": 35,
+        "summary": "会话数据源不可用（disabled-source-root + missing-optional-root），生命周期检测与循环工程均无法评估。",
+        "findingRefs": [
+          "learning-observation-boundary-blocked"
+        ]
+      }
+    ]
+  },
+  "findings": [
+    {
+      "id": "induction-strategy-change-unvalidated",
+      "title": "核心归纳策略变更（forceNewNodes）无行为验证承接",
+      "severity": "Medium",
+      "reason": "当前 diff 将 buildGraphChanges 的 forceNewNodes 参数在三处调用点统一改为 true，属图谱归纳策略变更。项目 0 个测试文件、无 CI，该行为变更若导致节点过密化或建节点策略回归，无任何机械信号可捕获。证据来源：静态 diff 检查与项目文件检视；运行时效果未观察。",
+      "expectedOutput": [
+        "一个可运行的聚焦测试覆盖 forceNewNodes 策略变更的核心行为分支，回归时可被机械捕获。"
+      ],
+      "expectedArtifact": "Focused test",
+      "aiFixPrompt": "/better-harness fix this issue\n\n为 buildGraphChanges(forceNewNodes=true) 路径添加聚焦行为测试，覆盖「新建节点」与「复用已有节点」两种分支。\n\n## Validation\n\n- 运行新增测试确认通过\n- 确认 forceNewNodes=false 时行为不变",
+      "dimensionRefs": [
+        "change-validation"
+      ]
+    },
+    {
+      "id": "no-behavior-feedback-layer",
+      "title": "项目完全缺失行为反馈层，核心改动仅靠阅读验收",
+      "severity": "Medium",
+      "reason": "80 个源文件、0 个测试文件、无测试运行器（vitest/jest/playwright 均未配置）、无 CI。核心路径（图谱归纳、对话分段、状态管理）的任何行为回归无快速信号。仅有 next lint + tsc --noEmit 两层静态检查，无法覆盖运行时行为。",
+      "expectedOutput": [
+        "项目具备可运行的测试基础设施，核心模块有首批行为测试，后续改动可获得快速反馈信号。"
+      ],
+      "expectedArtifact": "Test infrastructure",
+      "aiFixPrompt": "/better-harness fix this issue\n\n引入 vitest 作为测试运行器，配置 TypeScript + React 支持，并为 src/lib/graphUtils.ts 的核心导出编写首批单元测试。\n\n## Validation\n\n- npx vitest run 通过\n- package.json 新增 test 脚本",
+      "dimensionRefs": [
+        "change-validation"
+      ]
+    },
+    {
+      "id": "induction-failure-undiagnosable",
+      "title": "归纳失败路径静默吞错且不可关联，无法复现定位",
+      "severity": "Medium",
+      "reason": "graphUtils.ts 中 API 调用失败时仅 if(!res.ok) return null 与 console.error，无结构化日志、无请求/运行关联 id、无跨 API→buildGraphChanges→Dexie 边界的诊断链。AI 或用户遇到归纳失败时无法复现、定位、验证。映射至 Fast Feedback 与 Context Map 维度。",
+      "expectedOutput": [
+        "归纳失败时输出可关联的结构化诊断信息，支持复现-定位-验证闭环。"
+      ],
+      "expectedArtifact": "Structured error diagnostics",
+      "aiFixPrompt": "/better-harness fix this issue\n\n为图谱归纳 API 调用链添加结构化错误处理：包含请求 id、失败状态码、上下文（boardId/nodeId），替换静默 return null。\n\n## Validation\n\n- 模拟 API 失败时控制台输出包含关联 id 与上下文\n- 正常路径行为不变",
+      "dimensionRefs": [
+        "change-validation"
+      ]
+    },
+    {
+      "id": "environment-setup-incomplete",
+      "title": "环境启动所需密钥与桌面框架声明不一致",
+      "severity": "Low",
+      "reason": "package.json 声明 @ai-sdk/openai 依赖（需 .env 密钥），但无任何文档记录所需环境变量键名。同时声明 @tauri-apps/api + @tauri-apps/cli 却无 Tauri 工程文件，而 Electron 已接线（electron/main.js + 脚本）。新贡献者或 agent 无法从项目指令中确定正确的启动路径。",
+      "expectedOutput": [
+        "新操作者可通过项目自有指令确定所需密钥与正确启动路径，无需猜测。"
+      ],
+      "expectedArtifact": "Environment documentation",
+      "aiFixPrompt": "/better-harness fix this issue\n\n在项目根目录创建 .env.example 记录所需环境变量；移除未使用的 Tauri 依赖或补充 Tauri 工程文件；在 package.json 或文档中明确当前支持的桌面框架。\n\n## Validation\n\n- .env.example 包含所有必需键\n- npm run dev 与 npm run electron:dev 的依赖声明一致",
+      "dimensionRefs": [
+        "controlled-execution"
+      ]
+    },
+    {
+      "id": "no-delivery-acceptance-gate",
+      "title": "关键变更无交付验收门禁，单分支直投无回滚证据",
+      "severity": "Low",
+      "reason": "项目使用单 main 分支直接投递，无 PR/CI/合并保护、无 pre-commit 钩子。当前 critical 级 diff 混合功能开发、行为策略变更与新打包面，无验收决策记录。回滚/恢复路径未观察。对个人项目影响有限，但随复杂度增长风险累积。",
+      "expectedOutput": [
+        "关键变更在投递前经过至少一层机械验收检查，提供最小回滚边界。"
+      ],
+      "expectedArtifact": "Acceptance gate",
+      "aiFixPrompt": "/better-harness fix this issue\n\n添加最小化 pre-commit 钩子（lint-staged + typecheck）或 GitHub Actions CI 工作流，确保投递前通过静态检查。\n\n## Validation\n\n- 钩子或 CI 配置存在且可触发\n- 故意引入类型错误时被拦截",
+      "dimensionRefs": [
+        "reliable-delivery"
+      ]
+    },
+    {
+      "id": "skill-wrong-project-identity",
+      "title": "dev-workflow Skill 引用 Memos 项目身份与远程地址",
+      "severity": "Low",
+      "reason": "dev-workflow SKILL.md 自称「Memos 项目标准开发工作流」并硬编码 https://github.com/Tylor110077/Memos.git，而当前工作区为 Studyboard。若触发该 Skill 的 git push 步骤，可能推送至错误远程。无会话证据证明曾被触发，但属已配置资产中的确定性内容缺陷。",
+      "expectedOutput": [
+        "Skill 身份与当前工作区一致，触发时不会引用错误项目或推送至错误远程。"
+      ],
+      "expectedArtifact": "Corrected Skill identity",
+      "aiFixPrompt": "/better-harness fix this issue\n\n更新 .qoder/skills/dev-workflow/SKILL.md 中的项目名称与远程仓库地址，使其与当前 Studyboard 工作区一致。\n\n## Validation\n\n- Skill 中不再引用 Memos\n- git remote -v 与 Skill 中地址一致",
+      "dimensionRefs": [
+        "task-understanding"
+      ]
+    },
+    {
+      "id": "learning-observation-boundary-blocked",
+      "title": "会话数据源不可用，学习捕获检测完全阻断",
+      "severity": "Low",
+      "reason": "30 天窗口内 0 个合格会话，警告码 disabled-source-root + missing-optional-root 同时出现。生命周期机会检测、循环工程、纵向验证均无法评估。无法区分「无重复工作」与「工作历史不可见」。这是观测边界缺陷而非项目行为缺陷。",
+      "expectedOutput": [
+        "会话数据源可用后，学习捕获系统可检测重复工作流与生命周期机会。"
+      ],
+      "expectedArtifact": "Session source configuration",
+      "aiFixPrompt": "/better-harness fix this issue\n\n检查并启用 Qoder 会话数据源根路径配置，确保工作区会话事件可被采集。验证下次分析窗口内 eligibleSessions > 0。\n\n## Validation\n\n- 重新运行 session-analysis facts 返回 eligibleSessions > 0\n- 警告码中不再出现 disabled-source-root",
+      "dimensionRefs": [
+        "learning-capture"
+      ]
+    }
+  ]
+}

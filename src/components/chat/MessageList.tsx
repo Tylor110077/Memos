@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import type { Message } from 'ai';
 import { Globe, Loader2 } from 'lucide-react';
 import MessageBubble from './MessageBubble';
@@ -26,14 +26,27 @@ interface MessageListProps {
   onRemoveSegment?: (id: string) => void;
   generatingSegment?: string | null;
   isSegmentSelected?: (seg: ChatSegment) => boolean;
+  scrollRef?: RefObject<HTMLDivElement | null>;
+  onScrollReady?: (el: HTMLDivElement | null) => void;
 }
 
 export default function MessageList({
   messages, selectedMessages, webSearchStatus, segments = [], markStartIndex,
   onSelectChange, onEditMessage, onMarkStart, onMarkEnd,
-  onToggleSegment, onSelectSegment, onDeselectSegment, onGenerateSegment, onRenameSegment, onRemoveSegment, generatingSegment, isSegmentSelected,
+  onToggleSegment, onSelectSegment, onDeselectSegment, onGenerateSegment, onRenameSegment, onRemoveSegment, generatingSegment, isSegmentSelected, scrollRef, onScrollReady,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const internalScrollRef = useRef<HTMLDivElement>(null);
+
+  // 暴露 scroll container 给父组件
+  useEffect(() => {
+    if (scrollRef && internalScrollRef.current) {
+      (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = internalScrollRef.current;
+    }
+    if (onScrollReady && internalScrollRef.current) {
+      onScrollReady(internalScrollRef.current);
+    }
+  }, [scrollRef, onScrollReady]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -79,7 +92,7 @@ export default function MessageList({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-4">
+    <div ref={internalScrollRef} className="flex-1 overflow-y-auto pl-[28px] pr-4 py-4">
       {messages.map((message, index) => {
         const segAtThisIndex = segmentAtStart.get(index);
         const parentSeg = segmentRange.get(index);
@@ -98,7 +111,7 @@ export default function MessageList({
           const isCollapsed = seg.collapsed;
 
           return (
-            <div key={`seg-block-${seg.id}`}>
+            <div key={`seg-block-${seg.id}`} data-msg-index={seg.startMsgIndex}>
               <SegmentHeader
                 segment={seg}
                 messageCount={count}
@@ -144,16 +157,17 @@ export default function MessageList({
 
         // 普通消息（不属于任何 segment）
         return (
-          <MessageBubble
-            key={message.id}
-            message={message}
-            selected={selectedMessages?.has(index) ?? false}
-            onSelectChange={(checked) => onSelectChange?.(index, checked)}
-            onEditMessage={onEditMessage}
-            segmentMark={mark}
-            onMarkStart={() => onMarkStart?.(index)}
-            onMarkEnd={() => onMarkEnd?.(index)}
-          />
+          <div key={message.id} data-msg-index={index}>
+            <MessageBubble
+              message={message}
+              selected={selectedMessages?.has(index) ?? false}
+              onSelectChange={(checked) => onSelectChange?.(index, checked)}
+              onEditMessage={onEditMessage}
+              segmentMark={mark}
+              onMarkStart={() => onMarkStart?.(index)}
+              onMarkEnd={() => onMarkEnd?.(index)}
+            />
+          </div>
         );
       })}
       {/* 联网搜索状态指示器 */}

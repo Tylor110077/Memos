@@ -12,6 +12,7 @@ import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { SelectionPopup } from '@/components/shared/SelectionPopup';
 import { CognitionRing } from '@/components/cognition/CognitionRing';
 import { detectFileType } from '@/lib/fileUtils';
+import { apiFetch } from '@/lib/directApi';
 import { DocxPreview } from '@/components/file-preview/DocxPreview';
 import { XlsxPreview } from '@/components/file-preview/XlsxPreview';
 import { PptxPreview } from '@/components/file-preview/PptxPreview';
@@ -306,7 +307,7 @@ export function FullScreenDetail() {
     if (!node) return;
     setIsSummarizing(true);
     try {
-      const res = await fetch('/api/summarize', {
+      const res = await apiFetch('/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: node.content, title: node.title, apiKey: apiKey || undefined }),
@@ -398,7 +399,7 @@ export function FullScreenDetail() {
     try {
       const connectedEdges = edges.filter((e) => e.source === node.id || e.target === node.id);
   
-      const res = await fetch('/api/node/split', {
+      const res = await apiFetch('/api/node/split', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -410,6 +411,7 @@ export function FullScreenDetail() {
             target: e.target,
             relation: e.relation,
           })),
+          apiKey: apiKey || undefined,
         }),
       });
   
@@ -474,7 +476,7 @@ export function FullScreenDetail() {
     setAiLoading(true);
 
     try {
-      const res = await fetch('/api/chat', {
+      const res = await apiFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -560,7 +562,7 @@ export function FullScreenDetail() {
   const triggerCognitionEval = (msgs: ChatMessage[]) => {
     if (!node) return;
     setEvaluating(node.id, true);
-    fetch('/api/evaluate', {
+    apiFetch('/api/evaluate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

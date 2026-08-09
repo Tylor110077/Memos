@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { Message } from 'ai';
-import { Sparkles, Check, Loader2, StickyNote, Copy, Pencil, BookmarkPlus, BookmarkCheck } from 'lucide-react';
+import { Sparkles, Check, Loader2, StickyNote, Copy, Pencil, BookmarkPlus, BookmarkCheck, Square } from 'lucide-react';
 import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { useGraphStore } from '@/stores/graphStore';
 import { useBoardStore } from '@/stores/boardStore';
@@ -59,9 +59,10 @@ export default function MessageBubble({ message, selected = false, onSelectChang
         [{ role: 'assistant', content: typeof message.content === 'string' ? message.content : '' }],
         nodes,
         currentBoardId!,
-        edges
+        edges,
+        true
       );
-      if (changes && (changes.newEdges.length > 0 || changes.updatedNodes.length > 0)) {
+      if (changes && (changes.newNodes.length > 0 || changes.newEdges.length > 0 || changes.updatedNodes.length > 0)) {
         applyGraphChanges(changes);
         setGenerated(true);
       }
@@ -183,15 +184,18 @@ export default function MessageBubble({ message, selected = false, onSelectChang
             {noteAdded ? <Check size={12} /> : <StickyNote size={12} />}
             {noteAdded ? '已加入' : '加入笔记'}
           </button>
-          <label className="flex items-center gap-1 cursor-pointer select-none px-1 py-1">
-            <input
-              type="checkbox"
-              checked={selected}
-              onChange={(e) => onSelectChange?.(e.target.checked)}
-              className="w-3.5 h-3.5 rounded-full accent-[var(--accent)] cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
-            />
-            <span className="text-[10px] text-[var(--text-muted)] opacity-60 group-hover:opacity-100 transition-opacity">选择</span>
-          </label>
+          <button
+            onClick={() => onSelectChange?.(!selected)}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] transition-all ${
+              selected
+                ? 'text-[var(--accent)] bg-[var(--accent-soft)]'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+            }`}
+            title={selected ? '取消选择' : '选择此消息'}
+          >
+            {selected ? <Check size={12} /> : <Square size={12} />}
+            {selected ? '已选' : '选择'}
+          </button>
           {/* 分段标记按钮 */}
           {segmentMark === 'start-available' && (
             <button
@@ -200,7 +204,7 @@ export default function MessageBubble({ message, selected = false, onSelectChang
               title="标记为分段起始"
             >
               <BookmarkPlus size={12} />
-              <span>分段起</span>
+              <span>分段</span>
             </button>
           )}
           {segmentMark === 'end-available' && (
@@ -210,7 +214,7 @@ export default function MessageBubble({ message, selected = false, onSelectChang
               title="标记为分段结束"
             >
               <BookmarkCheck size={12} />
-              <span>分段止</span>
+              <span>分段</span>
             </button>
           )}
           {segmentMark === 'is-start' && (

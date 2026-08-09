@@ -120,13 +120,18 @@ export function RightPanel() {
 
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    if (isResizing) return; // 防止重复触发
     setIsResizing(true);
     const startX = e.clientX;
     const startWidth = widthRef.current;
     const maxWidth = window.innerWidth / 2;
     const onMove = (ev: MouseEvent) => {
-      const newWidth = Math.min(maxWidth, Math.max(MIN_WIDTH, startWidth - (ev.clientX - startX)));
+      ev.preventDefault();
+      const delta = ev.clientX - startX;
+      const newWidth = Math.min(maxWidth, Math.max(MIN_WIDTH, startWidth - delta));
       setWidth(newWidth);
+      widthRef.current = newWidth;
     };
     const onUp = () => {
       setIsResizing(false);
@@ -168,9 +173,10 @@ export function RightPanel() {
         {/* 拖拽手柄 */}
         <div
           onMouseDown={startResize}
-          className={`w-1 h-full cursor-col-resize hover:bg-[var(--accent)] active:bg-[var(--accent)] transition-colors flex-shrink-0 ${
+          className={`w-2 h-full cursor-col-resize hover:bg-[var(--accent)] active:bg-[var(--accent)] transition-colors flex-shrink-0 relative z-[10] ${
             isResizing ? 'bg-[var(--accent)]' : ''
           }`}
+          style={{ touchAction: 'none' }}
         />
         {/* 面板内容 */}
         <div

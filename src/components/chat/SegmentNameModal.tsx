@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { Loader2, Sparkles } from 'lucide-react';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { apiFetch } from '@/lib/directApi';
 
 interface SegmentNameModalProps {
   visible: boolean;
@@ -20,13 +22,14 @@ export function SegmentNameModal({ visible, messages, onConfirm, onCancel }: Seg
     setAiLoading(true);
     try {
       const conversationText = messages.map(m => `${m.role === 'user' ? '用户' : 'AI'}: ${m.content}`).join('\n').slice(0, 2000);
-      const res = await fetch('/api/chat', {
+      const res = await apiFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [{ role: 'user', content: `请用不超过10个字概括以下对话的主题，只输出主题名，不要其他内容：\n\n${conversationText}` }],
           mode: 'learn',
           style: 'concise',
+          apiKey: useSettingsStore.getState().apiKey || undefined,
         }),
       });
       if (!res.ok) throw new Error('failed');

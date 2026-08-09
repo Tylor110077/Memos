@@ -5,6 +5,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { useGraphStore } from '@/stores/graphStore';
 import { useBoardStore } from '@/stores/boardStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { apiFetch } from '@/lib/directApi';
 import { nanoid } from 'nanoid';
 import { X, Globe, Loader2 } from 'lucide-react';
 import type { KnowledgeNode, KnowledgeEdge } from '@/types';
@@ -23,7 +24,7 @@ export function DomainModal() {
     if (!domainName.trim()) return;
     setIsLoading(true);
     try {
-      const res = await fetch('/api/domain', {
+      const res = await apiFetch('/api/domain', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ domain: domainName.trim(), depth: 3, apiKey: apiKey || undefined }),

@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { X, StickyNote, Plus, GripHorizontal, Lightbulb, Loader2 } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { apiFetch } from '@/lib/directApi';
 import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 
 interface SelectionPopupProps {
@@ -119,7 +120,7 @@ export function SelectionPopup({
     setIsExplaining(true);
     setExplanation(null);
     try {
-      const res = await fetch('/api/explain', {
+      const res = await apiFetch('/api/explain', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, apiKey: apiKey || undefined }),

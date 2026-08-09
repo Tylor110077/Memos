@@ -9,9 +9,11 @@ import { useChatStore } from '@/stores/chatStore';
 import { useBoardStore } from '@/stores/boardStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { parseConversationToGraph } from '@/lib/graphUtils';
+import { apiFetch } from '@/lib/directApi';
 import { createConversation, updateConversation } from '@/lib/db';
 import { SelectionPopup } from '@/components/shared/SelectionPopup';
 import { SegmentNameModal } from './SegmentNameModal';
+import { ChatMinimap } from './ChatMinimap';
 import MessageList from './MessageList';
 import ChatInput from './ChatInput';
 import type { ResponseStyle, ChatSegment } from '@/types';
@@ -48,6 +50,8 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
   const [webSearchStatus, setWebSearchStatus] = useState<'searching' | { sources: number } | null>(null);
   const [selectionPopup, setSelectionPopup] = useState<{ text: string; x: number; y: number } | null>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
 
   // ===== 对话分段 =====
   const { segments, addSegment, updateSegment, removeSegment } = useChatStore();
@@ -103,12 +107,13 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
       const segMessages = messages.slice(seg.startMsgIndex, seg.endMsgIndex + 1)
         .map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : '' }));
       // 直接调用归纳 API 生成新节点（而非仅建边）
-      const res = await fetch('/api/graph/parse', {
+      const res = await apiFetch('/api/graph/parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversation: segMessages,
           existingNodes: nodes.map(n => ({ id: n.id, title: n.title })),
+          apiKey: apiKey || undefined,
         }),
       });
       if (res.ok) {
@@ -128,6 +133,7 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
 
   const { messages, append, setMessages, status, data } = useChat({
     api: '/api/chat',
+    fetch: apiFetch,
     body: {
       mode,
       style: responseStyle,
@@ -291,8 +297,8 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
                   const selectedContent = messages
                     .filter((_, idx) => selectedMessages.has(idx))
                     .map((m) => ({ role: m.role, content: typeof m.content === 'string' ? m.content : '' }));
-                  const changes = await parseConversationToGraph(selectedContent, nodes, currentBoardId!, edges);
-                  if (changes && (changes.newEdges.length > 0 || changes.updatedNodes.length > 0)) {
+                  const changes = await parseConversationToGraph(selectedContent, nodes, currentBoardId!, edges, true);
+                  if (changes && (changes.newNodes.length > 0 || changes.newEdges.length > 0 || changes.updatedNodes.length > 0)) {
                     applyGraphChanges(changes);
                   }
                   setSelectedMessages(new Set());
@@ -376,7 +382,7 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
       </div>
 
       {/* Messages */}
-      <div ref={messageListRef} onMouseUp={handleMouseUp} className="flex-1 overflow-hidden flex flex-col">
+      <div ref={messageListRef} onMouseUp={handleMouseUp} className="flex-1 overflow-hidden flex flex-col relative">
         <MessageList
           messages={messages}
           selectedMessages={selectedMessages}
@@ -411,6 +417,24 @@ export default function ChatPanel({ visible, onClose, currentNodeTitle }: ChatPa
           onRemoveSegment={handleRemoveSegment}
           generatingSegment={generatingSegment}
           isSegmentSelected={isSegmentSelected}
+          scrollRef={scrollContainerRef}
+          onScrollReady={(el) => setScrollEl(el)}
+        />
+        {/* 左侧缩略导航条 */}
+        <ChatMinimap
+          messages={messages}
+          segments={segments}
+          scrollContainer={scrollEl}
+          onScrollTo={(index) => {
+            const container = scrollContainerRef.current;
+            if (!container) return;
+            // 找到第 index 个消息元素并滚动到它
+            const msgElements = container.querySelectorAll('[data-msg-index]');
+            const target = Array.from(msgElements).find(el => el.getAttribute('data-msg-index') === String(index));
+            if (target) {
+              target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }}
         />
       </div>
 

@@ -18,3 +18,5 @@ build/
 .vscode/
 .idea/
 *.png
+release/
+out/

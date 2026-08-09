@@ -4,7 +4,7 @@ import { graphParseSchema } from '@/schemas';
 
 export async function POST(req: Request) {
   try {
-    const { conversation, existingNodes, apiKey } = await req.json();
+    const { conversation, existingNodes, apiKey, createNodes } = await req.json();
 
     if (!conversation || !Array.isArray(conversation) || conversation.length === 0) {
       return Response.json({ error: '对话内容不能为空' }, { status: 400 });
@@ -21,10 +21,23 @@ export async function POST(req: Request) {
       ? existingNodes.map((n: { id: string; title: string }) => `- ${n.title}`).join('\n')
       : '（暂无已有节点）';
 
-    const result = await generateObject({
-      model,
-      schema: graphParseSchema,
-      prompt: `分析以下对话，找出已有节点之间的关系。
+    const createPrompt = `分析以下对话，提取其中的知识点结构。
+
+已有节点列表（避免重复创建）：
+${existingNodesText}
+
+对话内容：
+${conversationText}
+
+请输出：
+1. newNodes: 对话中新出现的知识点（不在已有列表中的）
+2. updatedNodes: 需要补充内容的已有节点
+3. newEdges: 节点间的关系
+
+对于每个新节点，判断其 level：0=领域,1=主题,2=子主题,3+=知识点。
+对于每条边，判断类型：hierarchy/association/reference。`;
+
+    const linkPrompt = `分析以下对话，找出已有节点之间的关系。
 
 已有节点列表：
 ${existingNodesText}
@@ -45,7 +58,12 @@ ${conversationText}
 注意：
 - 只连接已有节点列表中的节点，不要创建新节点
 - 只提取明确的关系，不要过度连接
-- sourceTitle 和 targetTitle 必须精确匹配已有节点列表中的标题`,
+- sourceTitle 和 targetTitle 必须精确匹配已有节点列表中的标题`;
+
+    const result = await generateObject({
+      model,
+      schema: graphParseSchema,
+      prompt: createNodes ? createPrompt : linkPrompt,
     });
 
     return Response.json(result.object);

@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { X, Dices, BookOpen, Loader2, ChevronDown } from 'lucide-react';
 import { useGraphStore } from '@/stores/graphStore';
 import { useChatStore } from '@/stores/chatStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { apiFetch } from '@/lib/directApi';
 
 interface BreakthroughRecommendation {
   title: string;
@@ -27,7 +29,7 @@ export function BreakthroughModal({ visible, onClose }: BreakthroughModalProps) 
   const fetchBreakthrough = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/recommend', {
+      const res = await apiFetch('/api/recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -36,6 +38,7 @@ export function BreakthroughModal({ visible, onClose }: BreakthroughModalProps) 
             edges: [],
           },
           type: 'breakthrough',
+          apiKey: useSettingsStore.getState().apiKey || undefined,
         }),
       });
       if (res.ok) {

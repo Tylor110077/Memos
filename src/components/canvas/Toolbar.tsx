@@ -12,6 +12,8 @@ import { BreakthroughModal } from './BreakthroughModal';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { exportService, isFileSystemAccessSupported } from '@/lib/export/ExportService';
 import { exportAsZip, needsZipFallback } from '@/lib/export/ZipFallback';
+import { apiFetch } from '@/lib/directApi';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 interface ThemeResult {
   title: string;
@@ -58,12 +60,13 @@ export function Toolbar({ selectedNodeIds }: ToolbarProps) {
     if (!currentBoardId || sourceNodes.length === 0 || summarizing) return;
     setSummarizing(target);
     try {
-      const res = await fetch('/api/graph/themes', {
+      const res = await apiFetch('/api/graph/themes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           scope: target,
           nodes: sourceNodes.map((n) => ({ type: n.type, title: n.title, content: n.content })),
+          apiKey: useSettingsStore.getState().apiKey || undefined,
         }),
       });
       if (!res.ok) return;

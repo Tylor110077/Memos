@@ -6,6 +6,8 @@ import { useGraphStore } from '@/stores/graphStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useBoardStore } from '@/stores/boardStore';
 import { getCachedRecommendations, saveRecommendations, clearRecommendations } from '@/lib/db';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { apiFetch } from '@/lib/directApi';
 
 interface Recommendation {
   title: string;
@@ -37,13 +39,14 @@ export function RecommendPanel() {
 
     setIsLoading(true);
     try {
-      const res = await fetch('/api/recommend', {
+      const res = await apiFetch('/api/recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           currentNode: { title: node.title, content: node.content },
           graph: { nodes: nodes.map(n => ({ title: n.title, type: n.type, level: n.level })), edges: [] },
           type: 'related',
+          apiKey: useSettingsStore.getState().apiKey || undefined,
         }),
       });
       const data = res.ok ? await res.json() : { recommendations: [] };
