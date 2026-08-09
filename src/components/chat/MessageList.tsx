@@ -37,6 +37,8 @@ export default function MessageList({
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const internalScrollRef = useRef<HTMLDivElement>(null);
+  // 用户是否停留在底部附近：是则流式输出时自动跟随，否则不强行拉回
+  const stickToBottomRef = useRef(true);
 
   // 暴露 scroll container 给父组件
   useEffect(() => {
@@ -49,8 +51,17 @@ export default function MessageList({
   }, [scrollRef, onScrollReady]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (stickToBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
+
+  // 监听滚动：记录用户是否在底部附近
+  const handleListScroll = () => {
+    const el = internalScrollRef.current;
+    if (!el) return;
+    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
 
   if (messages.length === 0) {
     return (
@@ -92,7 +103,7 @@ export default function MessageList({
   };
 
   return (
-    <div ref={internalScrollRef} className="flex-1 overflow-y-auto pl-[28px] pr-4 py-4">
+    <div ref={internalScrollRef} onScroll={handleListScroll} className="flex-1 overflow-y-auto pl-[28px] pr-4 py-4">
       {messages.map((message, index) => {
         const segAtThisIndex = segmentAtStart.get(index);
         const parentSeg = segmentRange.get(index);

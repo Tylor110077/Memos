@@ -110,6 +110,8 @@ export function FullScreenDetail() {
   const [aiLoading, setAiLoading] = useState(false);
   const aiConvIdRef = useRef<string | null>(null);
   const aiListRef = useRef<HTMLDivElement>(null);
+  // 用户是否在 AI 列表底部附近：是则流式输出时跟随，否则不强行拉回
+  const aiStickRef = useRef(true);
 
   // ===== T-521: AI 模式切换 =====
   const [aiMode, setAiMode] = useState<ChatMode>('learn');
@@ -228,10 +230,18 @@ export function FullScreenDetail() {
     prevNodeIdRef.current = newId;
   }, [fullScreenNodeId]);
 
-  // 消息列表自动滚动到底部
+  // 消息列表自动滚动到底部（仅在用户停留在底部附近时）
   useEffect(() => {
-    aiListRef.current?.scrollTo({ top: aiListRef.current.scrollHeight, behavior: 'smooth' });
+    if (aiStickRef.current && aiListRef.current) {
+      aiListRef.current.scrollTo({ top: aiListRef.current.scrollHeight, behavior: 'smooth' });
+    }
   }, [aiMessages, aiLoading]);
+
+  const handleAiListScroll = () => {
+    const el = aiListRef.current;
+    if (!el) return;
+    aiStickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
 
   // 画中画：监听内容区滚动，当内容区滚出视口时显示小窗
   useEffect(() => {
@@ -1326,7 +1336,7 @@ export function FullScreenDetail() {
             </div>
 
             {/* 消息列表（圈选模式下监听 mouseup） */}
-            <div ref={aiListRef} onMouseUp={handleAiMouseUp} className={`flex-1 overflow-y-auto p-3 space-y-3 ${aiSelectionMode ? 'select-text cursor-text' : ''}`}>
+            <div ref={aiListRef} onMouseUp={handleAiMouseUp} onScroll={handleAiListScroll} className={`flex-1 overflow-y-auto p-3 space-y-3 ${aiSelectionMode ? 'select-text cursor-text' : ''}`}>
               {aiMessages.length === 0 && !aiLoading && (
                 <div className="h-full flex flex-col items-center justify-center gap-2 text-center px-4">
                   <MessageSquare size={24} className="text-[var(--text-muted)]" />
