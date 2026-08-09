@@ -47,8 +47,8 @@ export function Toolbar({ selectedNodeIds }: ToolbarProps) {
   const openImportModal = useUIStore((s) => s.openImportModal);
   const selectionTool = useUIStore((s) => s.selectionTool);
   const setSelectionTool = useUIStore((s) => s.setSelectionTool);
-  const nodeDisplayMode = useUIStore((s) => s.nodeDisplayMode);
-  const setNodeDisplayMode = useUIStore((s) => s.setNodeDisplayMode);
+  const cardNodeIds = useUIStore((s) => s.cardNodeIds);
+  const toggleCardDisplay = useUIStore((s) => s.toggleCardDisplay);
   const currentBoardId = useBoardStore((s) => s.currentBoardId);
   const [breakthroughOpen, setBreakthroughOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -189,11 +189,16 @@ export function Toolbar({ selectedNodeIds }: ToolbarProps) {
 
       <div className="my-1 border-t border-[var(--border)]" />
 
-      {/* 节点形态切换：圆点 / 卡片（图标保持不变，高亮表示当前为卡片） */}
-      <Tip label={nodeDisplayMode === 'dot' ? '切换为卡片形态' : '切换回圆点形态'}>
+      {/* 卡片展开：对当前 shift 选中的节点切换卡片形态；未选中则作用于全部 */}
+      <Tip label={selectionCount > 0 ? `展开/收起选中的 ${selectionCount} 个节点为卡片` : '展开/收起全部节点为卡片'}>
         <button
-          onClick={() => setNodeDisplayMode(nodeDisplayMode === 'dot' ? 'card' : 'dot')}
-          className={`${buttonClass} ${nodeDisplayMode === 'card' ? activeToolClass : ''}`}
+          onClick={() => {
+            const ids = selectionCount > 0
+              ? Array.from(selectedNodeIds!)
+              : useGraphStore.getState().nodes.map((n) => n.id);
+            toggleCardDisplay(ids);
+          }}
+          className={`${buttonClass} ${cardNodeIds.length > 0 ? activeToolClass : ''}`}
         >
           <LayoutGrid size={18} />
         </button>

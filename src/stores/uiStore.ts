@@ -2,14 +2,6 @@ import { create } from 'zustand';
 
 export type SelectionTool = 'none' | 'box' | 'click';
 export type ViewMode = 'canvas' | 'filetree';
-export type NodeDisplayMode = 'dot' | 'card';
-
-const DISPLAY_MODE_KEY = 'memos-node-display-mode';
-function loadDisplayMode(): NodeDisplayMode {
-  if (typeof window === 'undefined') return 'dot';
-  const v = localStorage.getItem(DISPLAY_MODE_KEY);
-  return v === 'card' ? 'card' : 'dot';
-}
 
 interface UIState {
   nodeDetailOpen: boolean;
@@ -23,8 +15,8 @@ interface UIState {
   selectionTool: SelectionTool;
   /** 主视图模式：画布 / 文件树 */
   viewMode: ViewMode;
-  /** 节点展示形态：圆点 / 卡片 */
-  nodeDisplayMode: NodeDisplayMode;
+  /** 以卡片形态展示的节点 ID 集合 */
+  cardNodeIds: string[];
 
   openNodeDetail: (nodeId: string) => void;
   closeNodeDetail: () => void;
@@ -38,7 +30,8 @@ interface UIState {
   setFocusDegree: (degree: number) => void;
   setSelectionTool: (tool: SelectionTool) => void;
   setViewMode: (mode: ViewMode) => void;
-  setNodeDisplayMode: (m: NodeDisplayMode) => void;
+  /** 切换指定节点的卡片形态：若全部已是卡片则收起，否则展开 */
+  toggleCardDisplay: (ids: string[]) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -51,7 +44,7 @@ export const useUIStore = create<UIState>((set) => ({
   focusDegree: 2,
   selectionTool: 'none',
   viewMode: 'canvas',
-  nodeDisplayMode: loadDisplayMode(),
+  cardNodeIds: [],
 
   openNodeDetail: (nodeId) => set({ nodeDetailOpen: true, nodeDetailId: nodeId }),
   closeNodeDetail: () => set({ nodeDetailOpen: false, nodeDetailId: null }),
@@ -65,8 +58,14 @@ export const useUIStore = create<UIState>((set) => ({
   setFocusDegree: (degree) => set({ focusDegree: degree }),
   setSelectionTool: (tool) => set((state) => ({ selectionTool: state.selectionTool === tool ? 'none' : tool })),
   setViewMode: (mode) => set({ viewMode: mode }),
-  setNodeDisplayMode: (m) => {
-    if (typeof window !== 'undefined') localStorage.setItem(DISPLAY_MODE_KEY, m);
-    set({ nodeDisplayMode: m });
+  toggleCardDisplay: (ids) => {
+    if (ids.length === 0) return;
+    set((state) => {
+      const cur = new Set(state.cardNodeIds);
+      const allIn = ids.every((id) => cur.has(id));
+      if (allIn) ids.forEach((id) => cur.delete(id));
+      else ids.forEach((id) => cur.add(id));
+      return { cardNodeIds: Array.from(cur) };
+    });
   },
 }));

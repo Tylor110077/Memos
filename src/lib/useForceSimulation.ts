@@ -52,7 +52,7 @@ export function useForceSimulation(
   nodes: KnowledgeNode[],
   edges: KnowledgeEdge[],
   onTick: (positions: Map<string, { x: number; y: number }>) => void,
-  displayMode: 'dot' | 'card' = 'dot',
+  cardIds: string[] = [],
 ) {
   const simRef = useRef<Simulation<SimNode, undefined> | null>(null);
   const nodesRef = useRef<SimNode[]>([]);
@@ -75,11 +75,10 @@ export function useForceSimulation(
         target: e.target,
       }));
 
-    // 卡片形态需要更大的碰撞体积与连线距离，避免卡片挤在一起
-    const isCard = displayMode === 'card';
-    const collideRadius = isCard ? 110 : 25;
-    const linkDistance = isCard ? 240 : 80;
-    const chargeStrength = isCard ? -200 : -80;
+    // 卡片节点需要更大的碰撞体积与连线距离，避免卡片挤在一起
+    const cardSet = new Set(cardIds);
+    const isCard = (id: string) => cardSet.has(id);
+    const anyCard = cardSet.size > 0;
 
     // 创建力模拟
     const sim = forceSimulation(simNodes)
@@ -87,13 +86,17 @@ export function useForceSimulation(
         'link',
         forceLink(simLinks as any)
           .id((d: any) => d.id)
-          .distance(linkDistance)
+          .distance((l: any) => {
+            const s = typeof l.source === 'object' ? l.source.id : l.source;
+            const t = typeof l.target === 'object' ? l.target.id : l.target;
+            return isCard(s) || isCard(t) ? 240 : 80;
+          })
           .strength(0.6),
       )
-      .force('charge', forceManyBody().strength(chargeStrength).distanceMax(isCard ? 420 : 260))
+      .force('charge', forceManyBody().strength(anyCard ? -140 : -80).distanceMax(anyCard ? 380 : 260))
       .force('center', forceCenter(0, 0).strength(0.08))
-      .force('collide', forceCollide(collideRadius))
-      .force('contain', forceContain(isCard ? 1400 : 900, 0.35)) // 边界约束
+      .force('collide', forceCollide().radius((n: any) => (isCard(n.id) ? 110 : 25)))
+      .force('contain', forceContain(anyCard ? 1200 : 900, 0.35)) // 边界约束
       .alphaDecay(0.025) // 较慢衰减，让回弹振荡更充分持久
       .velocityDecay(0.4) // 较低阻尼，保留弹性振荡感
       .on('tick', () => {
@@ -113,7 +116,7 @@ export function useForceSimulation(
       sim.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes.length, edges.length, displayMode]);
+  }, [nodes.length, edges.length, cardIds.join(',')]);
 
   // 拖拽开始时固定节点并温和重新激活模拟（低能量，避免其他节点被持续推飞）
   const dragStart = useCallback((nodeId: string) => {

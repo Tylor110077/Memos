@@ -104,10 +104,10 @@ export function DotNode({ data, selected }: NodeProps) {
   const isFileNode = nodeType === 'material' && !!materialType;
   const fileIconSize = level === 0 ? 28 : level === 1 ? 24 : level === 2 ? 20 : 16;
 
-  // 卡片形态：渲染 NodeCard（含 Handles 以保留连线）
-  const nodeDisplayMode = useUIStore((s) => s.nodeDisplayMode);
+  // 卡片形态：该节点在卡片集合中时渲染 NodeCard（含 Handles 以保留连线）
+  const isCard = useUIStore((s) => s.cardNodeIds.includes(node.id as string));
   const openFullScreen = useUIStore((s) => s.openFullScreen);
-  if (nodeDisplayMode === 'card') {
+  if (isCard) {
     return (
       <div className="relative" style={{ opacity: isDimmed ? 0.15 : 1 }}>
         {/* 卡片形态：手柄放在左右边缘，可抓取连线 */}
